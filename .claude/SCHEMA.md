@@ -18,7 +18,7 @@ CREATE TABLE praias (
   estacionamento_capacidade INTEGER,
   estacionamento_distancia_metros INTEGER,
   descricao TEXT,
-  ipma_global_id INTEGER,        -- nearest IPMA weather station
+  ipma_global_id INTEGER,        -- legacy; pre-Open-Meteo each beach pointed at the nearest IPMA station. Still populated for ~760 beaches but unused — meteo_horaria/meteo_diario now key on praia_id directly.
   google_place_id TEXT,          -- populated by n8n match-google-places workflow
   google_rating NUMERIC(2,1),    -- 1.0–5.0
   google_review_count INTEGER,
@@ -28,27 +28,65 @@ CREATE TABLE praias (
 );
 ```
 
-## meteo_diario (weather — updated 2x/day via n8n from IPMA)
-One row per IPMA station per day (35 stations × 5 forecast days = ~175 rows/run).
-Each beach's `ipma_global_id` points to its nearest station.
+## meteo_horaria (hourly forecast per beach — updated hourly via Supabase Edge Functions)
+Per-beach hourly forecasts from Open-Meteo (Forecast API + Marine API).
+~760 beaches × 120 forecast hours ≈ 91K rows; refreshed in place every hour
+via `meteo-praia-horaria` (pg_cron at minute 5 each hour, UTC).
 
 ```sql
-CREATE TABLE meteo_diario (
-  id SERIAL PRIMARY KEY,
-  ipma_global_id INTEGER NOT NULL,
-  data DATE NOT NULL,
-  temp_min DECIMAL(4,1),
-  temp_max DECIMAL(4,1),
-  precipitacao DECIMAL(5,1),
-  vento_direcao TEXT,
-  vento_intensidade INTEGER,
-  uv_index INTEGER,
-  estado_tempo TEXT,
-  temp_agua DECIMAL(4,1),
-  ondulacao_altura DECIMAL(3,1),
+CREATE TABLE meteo_horaria (
+  id BIGSERIAL PRIMARY KEY,
+  praia_id BIGINT NOT NULL REFERENCES praias(id) ON DELETE CASCADE,
+  hora_utc TIMESTAMPTZ NOT NULL,             -- forecast hour, UTC
+
+  -- Atmospheric (Open-Meteo Forecast API)
+  temp DECIMAL(4,1),                         -- °C at 2 m
+  precipitacao DECIMAL(5,2),                 -- mm in that hour
+  precipitacao_prob INTEGER,                 -- 0–100 %
+  vento_velocidade DECIMAL(5,1),             -- km/h at 10 m
+  vento_direcao INTEGER,                     -- degrees
+  vento_intensidade INTEGER,                 -- 0–9 Beaufort-like class (derived; used by scoring engine)
+  vento_rajada DECIMAL(5,1),                 -- km/h gust
+  uv_index DECIMAL(3,1),
+  weather_code INTEGER,                      -- WMO code
+  estado_tempo TEXT,                         -- Portuguese label derived from weather_code
+
+  -- Marine (Open-Meteo Marine API; null for inland beaches)
+  temp_agua DECIMAL(4,1),                    -- sea-surface temp °C
+  ondulacao_altura DECIMAL(4,2),             -- significant wave height m
+
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(ipma_global_id, data)
+  UNIQUE(praia_id, hora_utc)
 );
+CREATE INDEX ON meteo_horaria (praia_id, hora_utc);
+CREATE INDEX ON meteo_horaria (hora_utc);
+```
+
+## meteo_diario (view — per-beach daily aggregate over Europe/Lisbon days)
+Aggregates `meteo_horaria` into one row per `(praia_id, data)` for the
+homepage's "best beach today" list. Frontend reads exposed via the
+`useMeteo` / `usePraiaComMeteo` hooks. Note: this is now a VIEW, not a
+table — the underlying data lives in `meteo_horaria`.
+
+```sql
+CREATE VIEW meteo_diario AS
+SELECT
+  praia_id,
+  (hora_utc AT TIME ZONE 'Europe/Lisbon')::date AS data,
+  MIN(temp) AS temp_min,
+  MAX(temp) AS temp_max,
+  SUM(precipitacao) AS precipitacao,           -- mm/day total
+  MAX(precipitacao_prob) AS precipitacao_prob, -- peak hourly %
+  MAX(uv_index) AS uv_index,
+  -- afternoon (12–18 local) values for wind & state
+  MAX(vento_intensidade) FILTER (...) AS vento_intensidade,
+  (array_agg(vento_direcao ...) FILTER (...))[1] AS vento_direcao,
+  (array_agg(estado_tempo ...) FILTER (...))[1] AS estado_tempo,
+  AVG(temp_agua) AS temp_agua,
+  AVG(ondulacao_altura) AS ondulacao_altura,
+  MAX(updated_at) AS updated_at
+FROM meteo_horaria
+GROUP BY praia_id, (hora_utc AT TIME ZONE 'Europe/Lisbon')::date;
 ```
 
 ## qualidade_agua (bathing water quality — updated weekly via n8n)

@@ -181,11 +181,9 @@ export default function FichaPraia() {
       setPraia(p)
       setQualidade(qualRes.data ?? null)
 
-      if (p.ipma_global_id != null) {
-        const meteoRes = await supabase.from('meteo_diario').select('*')
-          .eq('ipma_global_id', p.ipma_global_id).eq('data', dataHoje()).maybeSingle()
-        setMeteo(meteoRes.data ?? null)
-      }
+      const meteoRes = await supabase.from('meteo_diario').select('*')
+        .eq('praia_id', p.id).eq('data', dataHoje()).maybeSingle()
+      setMeteo(meteoRes.data ?? null)
 
       setLoading(false)
     }
@@ -377,7 +375,7 @@ export default function FichaPraia() {
 
                 {/* Row 1 — atmosphere */}
                 <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                  <DataBox icone={<IcRain />} label="Precip." value={meteo.precipitacao != null ? `${meteo.precipitacao}%` : '—'} />
+                  <DataBox icone={<IcRain />} label="Precip." value={meteo.precipitacao_prob != null ? `${meteo.precipitacao_prob}%` : '—'} />
                   <DataBox icone={<IcWind />} label="Vento" value={meteo.vento_intensidade != null ? labelVento(meteo.vento_intensidade) : '—'} />
                   <DataBox icone={<IcSun />} label="UV" value={labelUV(meteo.uv_index)} />
                 </div>
@@ -408,13 +406,13 @@ export default function FichaPraia() {
             {temServicos ? (
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  {praia.bandeira_azul && <Servico texto="Bandeira Azul" icon="🚩" />}
-                  {praia.nadador_salvador && <Servico texto="Nadador-Salvador" icon="🏊" />}
-                  {praia.acessivel && <Servico texto="Acessível" icon="♿" />}
-                  {praia.restaurante && <Servico texto="Bar/Restaurante" icon="🍽️" />}
-                  {praia.estacionamento == null && <Servico texto="Estacionamento" icon="🅿️" />}
-                  {praia.estacionamento === 'gratuito' && <Servico texto="Estac. grátis" icon="🅿️" />}
-                  {praia.estacionamento === 'pago' && <Servico texto="Estac. pago" icon="🅿️" />}
+                  {praia.bandeira_azul && <Servico texto="Bandeira Azul" icon={<SvFlag />} />}
+                  {praia.nadador_salvador && <Servico texto="Nadador-Salvador" icon={<SvLifeBuoy />} />}
+                  {praia.acessivel && <Servico texto="Acessível" icon={<SvAccess />} />}
+                  {praia.restaurante && <Servico texto="Bar/Restaurante" icon={<SvUtensils />} />}
+                  {praia.estacionamento === 'gratuito' && <Servico texto="Estac. grátis" icon={<SvParking />} />}
+                  {praia.estacionamento === 'pago' && <Servico texto="Estac. pago" icon={<SvParking />} />}
+                  {praia.estacionamento == null && <Servico texto="Estacionamento" icon={<SvParking />} />}
                 </div>
                 {praia.estacionamento_capacidade != null && (
                   <p style={{ fontSize: 12, color: C.navyDim, margin: '12px 0 0' }}>
@@ -561,10 +559,58 @@ const tapTarget: React.CSSProperties = {
   flexShrink: 0,
 }
 
-function Servico({ icon, texto }: { icon: string; texto: string }) {
+function SvFlag() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528" />
+    </svg>
+  )
+}
+function SvLifeBuoy() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="m4.93 4.93 4.24 4.24" />
+      <path d="m14.83 9.17 4.24-4.24" />
+      <path d="m14.83 14.83 4.24 4.24" />
+      <path d="m9.17 14.83-4.24 4.24" />
+      <circle cx="12" cy="12" r="4" />
+    </svg>
+  )
+}
+function SvAccess() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="16" cy="4" r="1" />
+      <path d="m18 19 1-7-6 1" />
+      <path d="m5 8 3-3 5.5 3-2.36 3.5" />
+      <path d="M4.24 14.5a5 5 0 0 0 6.88 6" />
+      <path d="M13.76 17.5a5 5 0 0 0-6.88-6" />
+    </svg>
+  )
+}
+function SvUtensils() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" />
+      <path d="M7 2v20" />
+      <path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" />
+    </svg>
+  )
+}
+function SvParking() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M9 17V7h4a3 3 0 0 1 0 6H9" />
+    </svg>
+  )
+}
+
+function Servico({ icon, texto }: { icon: React.ReactNode; texto: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ fontSize: 16 }}>{icon}</span>
+      <span style={{ display: 'flex', alignItems: 'center' }}>{icon}</span>
       <span style={{ fontSize: 14, color: C.navy, fontWeight: 500 }}>{texto}</span>
     </div>
   )

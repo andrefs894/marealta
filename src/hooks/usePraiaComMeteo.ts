@@ -43,12 +43,12 @@ export function usePraiaComMeteo(userLat: number | null, userLng: number | null)
 
   // Join beaches with today's weather, water quality, crowd level, and distance from user location.
   const praiaComMeteo = useMemo((): PraiaComMeteo[] => {
-    const meteoMap     = new Map(meteo.map(m => [m.ipma_global_id, m]))
+    const meteoMap     = new Map(meteo.map(m => [m.praia_id, m]))
     const qualidadeMap = new Map(qualidades.map(q => [q.praia_id, q]))
     const ocupacaoMap  = new Map(ocupacoes.map(o => [o.praia_id, o.nivel_ocupacao]))
 
     return praias.map(p => {
-      const meteoP = p.ipma_global_id != null ? meteoMap.get(p.ipma_global_id) : undefined
+      const meteoP = meteoMap.get(p.id)
       // Prefer real DB data (ocupacao_horaria override) when present; fall back to heuristic estimator.
       const real = ocupacaoMap.get(p.id)
       const ocupacao_atual = real ?? estimarOcupacao(p, meteoP).nivel

@@ -3,15 +3,16 @@ import { supabase } from '../lib/supabase'
 import type { MeteoDiario } from '../types'
 import { dataHoje } from '../lib/utils'
 
-// Fetches today's weather for a beach, using the beach's assigned IPMA station.
-// Pass the beach's ipma_global_id (available on the Praia object after import).
-export function useMeteo(ipmaGlobalId: number | null) {
+// Fetches today's per-beach daily aggregate from the meteo_diario view.
+// The view aggregates meteo_horaria (hourly Open-Meteo data) into one row
+// per (praia_id, data).
+export function useMeteo(praiaId: number | null) {
   const [meteo, setMeteo] = useState<MeteoDiario | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => {
-    if (ipmaGlobalId == null) {
+    if (praiaId == null) {
       setLoading(false)
       return
     }
@@ -20,9 +21,9 @@ export function useMeteo(ipmaGlobalId: number | null) {
       const { data, error } = await supabase
         .from('meteo_diario')
         .select('*')
-        .eq('ipma_global_id', ipmaGlobalId)
+        .eq('praia_id', praiaId)
         .eq('data', dataHoje())
-        .single()
+        .maybeSingle()
 
       if (error) {
         setErro(error.message)
@@ -33,7 +34,7 @@ export function useMeteo(ipmaGlobalId: number | null) {
     }
 
     carregar()
-  }, [ipmaGlobalId])
+  }, [praiaId])
 
   return { meteo, loading, erro }
 }

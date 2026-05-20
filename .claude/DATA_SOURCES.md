@@ -1,10 +1,20 @@
 # Data Sources
 
-## 1. Weather — IPMA (free)
-- **Endpoint:** `https://api.ipma.pt/open-data/forecast/meteorology/cities/daily/{globalIdLocal}.json`
-- **Data:** Temp min/max, precipitation, wind, weather state, UV
-- **Update:** 2x/day (00h and 12h UTC) via `n8n/workflows/meteo-diario.json`
-- **Auth:** None (free, open). Good practice to email `webmaster@ipma.pt`
+## 1. Weather + Marine — Open-Meteo (free)
+- **Forecast endpoint:** `https://api.open-meteo.com/v1/forecast` — temp, precipitation, wind, UV, weather code (WMO)
+- **Marine endpoint:** `https://marine-api.open-meteo.com/v1/marine` — sea-surface temp, wave height
+- **Data:** Hourly forecast, 5 days out, per beach (lat/lon based — not regional stations)
+- **Update:** Hourly via `supabase/functions/meteo-praia-horaria` (pg_cron, minute 5 each hour, UTC)
+- **Auth:** None. Free tier recommends < 10,000 calls/day; we use ~32/day (8 batched calls × 2 APIs × hourly cron / 6h Open-Meteo model refresh).
+- **Batching:** ~100 beaches per request via comma-separated `latitude=,&longitude=,`. The response is a parallel array of forecasts in input order.
+- **Writes:** `meteo_horaria` table (~91K rows refreshed in place); `meteo_diario` view aggregates these into per-beach daily summaries for the homepage.
+
+### Legacy: IPMA (free)
+Maré Alta originally pulled daily forecasts from IPMA's 35 stations
+(`https://api.ipma.pt/open-data/forecast/meteorology/cities/daily/{globalIdLocal}.json`).
+Replaced 2026-05-20 with Open-Meteo for hourly per-beach accuracy. The 3
+n8n workflows (`meteo-diario.json`, `mar-e-temperatura.json`,
+`uv-index.json`) are retained in the repo as documentation but disabled.
 
 ## 2. Beach list — APA / SNIAmb ArcGIS REST (free)
 - **Endpoint:** `https://sniambgeoogc.apambiente.pt/getogc/rest/services/SNIAmb/Praias/MapServer/0/query`
@@ -65,8 +75,17 @@ Setup steps (one-time, manual):
 
 ---
 
-## n8n setup
-Runs locally via Docker. Connects to Supabase cloud via Postgres:
+## Supabase Edge Functions (cloud — always on)
+Hourly weather ingest now runs on Supabase. Code in `supabase/functions/`, schedule managed by pg_cron + pg_net (`supabase/migrations/*_setup_meteo_cron.sql` etc.). Free tier: 500K invocations/month; we use ~720/month.
+
+| Function | Purpose | Cadence |
+|---|---|---|
+| `meteo-praia-horaria` | Open-Meteo Forecast + Marine → `meteo_horaria` | hourly, minute 5 UTC |
+
+To deploy/redeploy: `supabase functions deploy <name>`. The service_role JWT used by pg_cron lives in Supabase Vault under secret name `service_role_key`.
+
+## n8n setup (legacy / one-time + monthly)
+Runs locally via Docker. Used for one-time imports and monthly refresh jobs that don't need 24/7 cloud uptime.
 - Host: `db.[PROJECT_ID].supabase.co` | DB: `postgres` | User: `postgres` | Port: `5432`
 
 ### Workflows
@@ -74,9 +93,9 @@ Runs locally via Docker. Connects to Supabase cloud via Postgres:
 |---|---|---|
 | `importar-praias.json` | One-time beach import from APA | once |
 | `preencher-codigos-balneares.json` | Fills bathing water classification codes | once |
-| `meteo-diario.json` | IPMA daily forecast | cron 00h/12h |
-| `mar-e-temperatura.json` | Sea state & water temp | daily |
-| `uv-index.json` | UV index | daily |
+| `meteo-diario.json` | IPMA daily forecast | retired 2026-05-20 — replaced by Supabase Edge Function `meteo-praia-horaria` (Open-Meteo, hourly, per-beach) |
+| `mar-e-temperatura.json` | Sea state & water temp | retired — folded into `meteo-praia-horaria` |
+| `uv-index.json` | UV index | retired — folded into `meteo-praia-horaria` |
 | `qualidade-agua.json` | InfoÁgua water quality | weekly |
 | `match-google-places.json` | Resolve `google_place_id` + rating | monthly (incremental) |
 | `popular-times.json` | SerpAPI hourly busyness | monthly (1st 06h) — dormant |

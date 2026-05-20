@@ -23,19 +23,42 @@ export interface Praia {
   created_at: string
 }
 
+// Daily aggregate per beach, computed by the meteo_diario SQL view from
+// meteo_horaria. Same name as the previous IPMA-keyed table so most
+// frontend reads only had to change their join key (ipma_global_id → praia_id).
 export interface MeteoDiario {
-  id: number
-  ipma_global_id: number  // references IPMA station, not an individual beach
+  praia_id: number
   data: string
   temp_min: number | null
   temp_max: number | null
-  precipitacao: number | null
-  vento_direcao: string | null
-  vento_intensidade: number | null
+  precipitacao: number | null            // mm/day total
+  precipitacao_prob: number | null       // 0–100, peak hourly probability for the day
+  vento_direcao: number | null           // degrees (Open-Meteo)
+  vento_intensidade: number | null       // 0–9 Beaufort-like class (derived in the ingest function for scoring compat)
   uv_index: number | null
   estado_tempo: string | null
   temp_agua: number | null
   ondulacao_altura: number | null
+  updated_at: string
+}
+
+// Hourly forecast per beach, sourced from Open-Meteo's Forecast + Marine APIs.
+// 760 beaches × ~120 forecast hours ≈ 91K rows; refreshed in place every hour.
+export interface MeteoHoraria {
+  praia_id: number
+  hora_utc: string                       // ISO timestamp (TIMESTAMPTZ)
+  temp: number | null                    // °C at 2m
+  precipitacao: number | null            // mm in that hour
+  precipitacao_prob: number | null       // 0–100
+  vento_velocidade: number | null        // km/h
+  vento_direcao: number | null           // degrees
+  vento_intensidade: number | null       // 0–9 class
+  vento_rajada: number | null            // km/h gust
+  uv_index: number | null
+  weather_code: number | null            // WMO code
+  estado_tempo: string | null            // Portuguese label
+  temp_agua: number | null               // sea-surface temp °C (null inland)
+  ondulacao_altura: number | null        // significant wave height m (null inland)
   updated_at: string
 }
 
