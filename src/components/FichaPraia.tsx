@@ -15,6 +15,8 @@ import { useSeletorNavegacao } from './SeletorNavegacao'
 import { useFavoritas } from '../hooks/useFavoritas'
 import { useFotos } from '../hooks/useFotos'
 import { usePontosInteresse } from '../hooks/usePontosInteresse'
+import { useMeteoHoraria } from '../hooks/useMeteoHoraria'
+import PrevisaoHoraria from './PrevisaoHoraria'
 
 const PORTUGAL_BOUNDS: L.LatLngBoundsExpression = [[36.3, -10.0], [42.5, -5.8]]
 
@@ -193,6 +195,7 @@ export default function FichaPraia() {
 
   const { fotos } = useFotos(praia?.id ?? null)
   const { pontos } = usePontosInteresse(praia?.id ?? null)
+  const { horas } = useMeteoHoraria(praia?.id ?? null)
   const { abrir: abrirNavegacao, sheet: sheetNavegacao } = useSeletorNavegacao()
 
   if (loading) return <Skeleton />
@@ -396,6 +399,9 @@ export default function FichaPraia() {
               <p style={{ color: C.navyDim, fontSize: 13, margin: 0 }}>Sem dados meteorológicos para hoje.</p>
             )}
           </div>
+
+          {/* Hourly forecast */}
+          <PrevisaoHoraria horas={horas} />
 
           {/* Occupation */}
           <IndicadorOcupacao nivel={ocupacao.nivel} fonte={ocupacao.fonte} variant="card" />
