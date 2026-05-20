@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import type { MeteoHoraria } from '../types'
 import { iconeEstadoTempo, isNoiteLisboa } from '../lib/utils'
 
-// Horizontal scrolling strip of hourly forecasts (next ~24 daylight/evening
-// hours) for a beach. Mounts on FichaPraia. Touch users swipe; desktop users
-// get the floating arrow buttons.
+// Horizontal scrolling strip of daylight-hour forecasts for a beach. Rolls
+// across day boundaries so after today's sunset you see tomorrow's daylight,
+// then the day after, up to ~24 daylight hours. Touch users swipe; desktop
+// users get the floating arrow buttons. Day boundaries are marked with a
+// small "Amanhã" / weekday separator between groups.
 
 const C = {
   navy: '#1E3A5F',
@@ -22,6 +24,13 @@ interface Props {
   horas: MeteoHoraria[]
 }
 
+function lisbonDate(iso: string | Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    timeZone: 'Europe/Lisbon',
+  }).format(typeof iso === 'string' ? new Date(iso) : iso)
+}
+
 function formatarHora(iso: string): string {
   const hh = new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
@@ -29,6 +38,20 @@ function formatarHora(iso: string): string {
     timeZone: 'Europe/Lisbon',
   }).format(new Date(iso))
   return `${hh.padStart(2, '0').slice(0, 2)}h`
+}
+
+// "Amanhã" for tomorrow's date, weekday name (Qua, Qui…) for later days.
+// Today is implicit so it never returns a label for today.
+function labelDia(iso: string): string {
+  const dia = lisbonDate(iso)
+  const amanhaDate = new Date()
+  amanhaDate.setDate(amanhaDate.getDate() + 1)
+  const amanha = lisbonDate(amanhaDate)
+  if (dia === amanha) return 'Amanhã'
+  return new Intl.DateTimeFormat('pt-PT', {
+    weekday: 'short',
+    timeZone: 'Europe/Lisbon',
+  }).format(new Date(iso)).replace('.', '').replace(/^./, c => c.toUpperCase())
 }
 
 export default function PrevisaoHoraria({ horas }: Props) {
@@ -106,7 +129,7 @@ export default function PrevisaoHoraria({ horas }: Props) {
         }}
         className="previsao-horaria-strip"
       >
-        {horas.map((h) => {
+        {horas.map((h, idx) => {
           // "Agora" matches exactly one row — the row whose UTC hour matches
           // the current UTC hour. Comparing floored hours (not within-1h)
           // avoids the bug where two consecutive rows both matched when
@@ -115,9 +138,19 @@ export default function PrevisaoHoraria({ horas }: Props) {
           const isAgora = Math.floor(new Date(h.hora_utc).getTime() / 3600000) === horaAgora
           const noite = isNoiteLisboa(h.hora_utc)
           const choverá = (h.precipitacao_prob ?? 0) >= 30 || (h.precipitacao ?? 0) > 0.1
+
+          // Show a slim day separator before any cell whose Lisbon date
+          // differs from the previous cell's. For the very first cell, only
+          // separate when it isn't today (i.e. the user opened the page
+          // after sunset and the strip starts with tomorrow's morning).
+          const dataLisbon = lisbonDate(h.hora_utc)
+          const dataAnterior = idx > 0 ? lisbonDate(horas[idx - 1].hora_utc) : lisbonDate(new Date())
+          const novoDia = dataLisbon !== dataAnterior
+
           return (
+            <Fragment key={h.hora_utc}>
+            {novoDia && <SeparadorDia label={labelDia(h.hora_utc)} />}
             <div
-              key={h.hora_utc}
               role="listitem"
               style={{
                 flex: '0 0 auto',
@@ -164,6 +197,7 @@ export default function PrevisaoHoraria({ horas }: Props) {
                 {choverá && h.precipitacao_prob != null ? `${h.precipitacao_prob}%` : ''}
               </span>
             </div>
+            </Fragment>
           )
         })}
       </div>
@@ -183,6 +217,34 @@ export default function PrevisaoHoraria({ horas }: Props) {
       <style>{`
         .previsao-horaria-strip::-webkit-scrollbar { display: none; }
       `}</style>
+    </div>
+  )
+}
+
+function SeparadorDia({ label }: { label: string }) {
+  return (
+    <div style={{
+      flex: '0 0 auto',
+      width: 40,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '0 2px',
+      borderLeft: '1px dashed rgba(30,58,95,0.2)',
+      marginLeft: 2,
+    }}>
+      <span style={{
+        fontSize: 9.5,
+        fontWeight: 700,
+        color: C.navyDim,
+        letterSpacing: '1.5px',
+        textTransform: 'uppercase',
+        textAlign: 'center',
+        lineHeight: 1.1,
+      }}>
+        {label}
+      </span>
     </div>
   )
 }

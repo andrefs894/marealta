@@ -3,20 +3,12 @@ import { supabase } from '../lib/supabase'
 import type { MeteoHoraria } from '../types'
 import { isNoiteLisboa } from '../lib/utils'
 
-// Returns the local Lisbon date (YYYY-MM-DD) for an ISO timestamp.
-function lisbonDate(iso: string | Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    timeZone: 'Europe/Lisbon',
-  }).format(typeof iso === 'string' ? new Date(iso) : iso)
-}
+const DAYLIGHT_HOURS_TARGET = 24 // ~ 2 days of daylight content
 
-// Fetches the remaining daylight hours of TODAY (Lisbon time) for a beach.
-// Strict interpretation: the strip empties out after sunset and stays empty
-// until the next morning's ingest — the section auto-hides via the empty
-// state check in PrevisaoHoraria.
+// Fetches the next N daylight hours for a beach, rolling across days as
+// needed. After today's sunset the strip jumps to tomorrow's first
+// daylight hour, then continues into the day after, up to the limit.
+// Night hours (00:00–sunrise + sunset–24:00) are skipped entirely.
 export function useMeteoHoraria(praiaId: number | null) {
   const [horas, setHoras] = useState<MeteoHoraria[]>([])
   const [loading, setLoading] = useState(true)
@@ -31,15 +23,17 @@ export function useMeteoHoraria(praiaId: number | null) {
     async function carregar() {
       const desde = new Date()
       desde.setMinutes(0, 0, 0)
-      const hoje = lisbonDate(new Date())
 
+      // Over-fetch generously — in winter (10 daylight hours/day) we need
+      // ~2.4 days × 24 = ~58 raw rows to surface 24 daylight ones. The
+      // Open-Meteo ingest stores 5 days × 24 = 120 hours, so we have headroom.
       const { data, error } = await supabase
         .from('meteo_horaria')
         .select('*')
         .eq('praia_id', praiaId)
         .gte('hora_utc', desde.toISOString())
         .order('hora_utc', { ascending: true })
-        .limit(24)
+        .limit(80)
 
       if (error) {
         setErro(error.message)
@@ -47,12 +41,9 @@ export function useMeteoHoraria(praiaId: number | null) {
         return
       }
 
-      // Keep only rows whose local Lisbon date is today AND that fall in the
-      // daylight window. The daylight check makes the strip stop at sunset
-      // (sun-icon rows only — evening twilight is excluded).
-      const visiveis = (data ?? []).filter(h =>
-        lisbonDate(h.hora_utc) === hoje && !isNoiteLisboa(h.hora_utc)
-      )
+      const visiveis = (data ?? [])
+        .filter(h => !isNoiteLisboa(h.hora_utc))
+        .slice(0, DAYLIGHT_HOURS_TARGET)
 
       setHoras(visiveis)
       setLoading(false)
