@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useRecomendacao } from '../hooks/useRecomendacao'
 import { useFavoritas } from '../hooks/useFavoritas'
 import { usePerfil } from '../hooks/usePerfil'
-import { haversineKm, iconeEstadoTempo, labelQualidadeAgua, labelUV, labelVento, isNoiteAgora } from '../lib/utils'
+import { haversineKm, iconeEstadoTempo, labelQualidadeAgua, labelUV, labelVento, isAlvoAmanha } from '../lib/utils'
 import type { ContextoApp } from '../App'
 import type { DistanciaMaxima, RecomendacaoResult } from '../types'
 
@@ -175,7 +175,7 @@ function Hero({ rec, isFavorita, onToggleFavorita }: {
         fontSize: 11, fontWeight: 600, color: C.creamDim,
         letterSpacing: '2.5px', textTransform: 'uppercase', margin: '0 0 14px',
       }}>
-        A sua recomendação para hoje
+        A sua recomendação para {isAlvoAmanha() ? 'amanhã' : 'hoje'}
       </p>
 
       {/* Name + location + favourite (circular outlined button) */}
@@ -227,7 +227,7 @@ function Hero({ rec, isFavorita, onToggleFavorita }: {
             alignItems: 'center', justifyContent: 'flex-end', gap: 10,
           }}>
             <span style={{ display: 'flex', lineHeight: 1, color: C.creamText }} aria-hidden>
-              {iconeEstadoTempo(m.estado_tempo, m.precipitacao, 64, isNoiteAgora())}
+              {iconeEstadoTempo(m.estado_tempo, m.precipitacao, 64)}
             </span>
             <p style={{
               fontSize: 14, fontWeight: 400, color: C.creamDim,
@@ -270,7 +270,7 @@ function Hero({ rec, isFavorita, onToggleFavorita }: {
       <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
         <DataBox
           icone={<IcWind />}
-          value={praia.meteoAgora?.vento_intensidade != null ? labelVento(praia.meteoAgora.vento_intensidade) : '—'}
+          value={m?.vento_intensidade != null ? labelVento(m.vento_intensidade) : '—'}
           label="VENTO"
         />
         <DataBox
@@ -280,7 +280,7 @@ function Hero({ rec, isFavorita, onToggleFavorita }: {
         />
         <DataBox
           icone={<IcSun />}
-          value={labelUV(praia.meteoAgora?.uv_index)}
+          value={labelUV(m?.uv_index)}
           label="UV"
         />
       </div>
@@ -515,7 +515,7 @@ function CartaoSecundario({ rec }: { rec: RecomendacaoResult }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: C.navy, flexShrink: 0,
         }}>
-          {iconeEstadoTempo(m?.estado_tempo, m?.precipitacao, 20, isNoiteAgora())}
+          {iconeEstadoTempo(m?.estado_tempo, m?.precipitacao, 20)}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{

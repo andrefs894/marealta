@@ -20,9 +20,40 @@ export function estimarMinutos(lat1: number, lon1: number, lat2: number, lon2: n
   return Math.max(5, Math.round(km * 1.4 / 45 * 60))
 }
 
-// Returns today's date as a YYYY-MM-DD string (used to query meteo_diario)
+// Returns today's date as a YYYY-MM-DD string (used to query meteo_diario).
+// Uses the browser's local timezone — fine for Portuguese users.
 export function dataHoje(): string {
   return new Date().toISOString().split('T')[0]
+}
+
+// Returns tomorrow's date as a YYYY-MM-DD string in Europe/Lisbon time.
+export function dataAmanha(): string {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    timeZone: 'Europe/Lisbon',
+  }).format(d)
+}
+
+// "Smart day/night": returns today's date during the day, tomorrow's after
+// sunset. Used by the recommendation hooks so that opening the app at 22:00
+// shows tomorrow's beach forecast (today is already over for beach planning),
+// while opening at 03:00 still shows today (daylight is still coming).
+// Threshold mirrors isNoiteLisboa's evening cutoff (21h summer / 18h winter).
+export function dataAlvo(): string {
+  const now = new Date()
+  const hour = parseInt(new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit', hour12: false, timeZone: 'Europe/Lisbon',
+  }).format(now), 10)
+  const month = now.getUTCMonth()
+  const eveningEnd = month >= 3 && month <= 8 ? 21 : 18
+  return hour >= eveningEnd ? dataAmanha() : dataHoje()
+}
+
+// True when the recommendation target is tomorrow (i.e. we're past sunset).
+export function isAlvoAmanha(): boolean {
+  return dataAlvo() !== dataHoje()
 }
 
 // Converts wind intensity code (IPMA 0–9 scale) to a human-readable Portuguese label

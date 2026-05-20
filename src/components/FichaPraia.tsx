@@ -4,9 +4,9 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { supabase } from '../lib/supabase'
-import type { Praia, MeteoDiario, MeteoHoraria, QualidadeAgua } from '../types'
+import type { Praia, MeteoDiario, QualidadeAgua } from '../types'
 import type { ContextoApp } from '../App'
-import { dataHoje, labelVento, iconeEstadoTempo, labelUV, estimarMinutos, isNoiteAgora } from '../lib/utils'
+import { dataAlvo, isAlvoAmanha, labelVento, iconeEstadoTempo, labelUV, estimarMinutos } from '../lib/utils'
 import { estimarOcupacao } from '../lib/ocupacao'
 import IndicadorOcupacao from './IndicadorOcupacao'
 import GaleriaFotos from './GaleriaFotos'
@@ -162,11 +162,6 @@ export default function FichaPraia() {
 
   const [praia, setPraia] = useState<Praia | null>(null)
   const [meteo, setMeteo] = useState<MeteoDiario | null>(null)
-  // Current-hour snapshot from meteo_horaria, fed alongside the daily
-  // aggregate. UV / wind / precip % read from this so the card matches
-  // "right now" instead of today's peak (which made UV read as "Muito
-  // Alto" at midnight).
-  const [meteoAgora, setMeteoAgora] = useState<MeteoHoraria | null>(null)
   const [qualidade, setQualidade] = useState<QualidadeAgua | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
@@ -188,20 +183,10 @@ export default function FichaPraia() {
       setPraia(p)
       setQualidade(qualRes.data ?? null)
 
-      // Daily aggregate (temp range, sea data) + current-hour snapshot in parallel.
-      const desde = new Date(); desde.setMinutes(0, 0, 0)
-      const ate = new Date(desde.getTime() + 3600000)
-      const [meteoRes, agoraRes] = await Promise.all([
-        supabase.from('meteo_diario').select('*')
-          .eq('praia_id', p.id).eq('data', dataHoje()).maybeSingle(),
-        supabase.from('meteo_horaria').select('*')
-          .eq('praia_id', p.id)
-          .gte('hora_utc', desde.toISOString())
-          .lt('hora_utc', ate.toISOString())
-          .maybeSingle(),
-      ])
+      // dataAlvo() = today during the day, tomorrow after sunset.
+      const meteoRes = await supabase.from('meteo_diario').select('*')
+        .eq('praia_id', p.id).eq('data', dataAlvo()).maybeSingle()
       setMeteo(meteoRes.data ?? null)
-      setMeteoAgora(agoraRes.data ?? null)
 
       setLoading(false)
     }
@@ -347,6 +332,9 @@ export default function FichaPraia() {
           <div style={cardStyle}>
             {meteo ? (
               <>
+                {/* Small Hoje/Amanhã header so it's obvious which day this card is forecasting */}
+                <p style={labelStyle}>{isAlvoAmanha() ? 'Amanhã' : 'Hoje'}</p>
+
                 {/* Big icon + status on the left, big temperature on the right */}
                 <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, marginBottom: 22 }}>
                   <div style={{
@@ -354,7 +342,7 @@ export default function FichaPraia() {
                     alignItems: 'center', justifyContent: 'flex-end', gap: 10,
                   }}>
                     <span style={{ display: 'flex', lineHeight: 1, color: C.navy }} aria-hidden>
-                      {iconeEstadoTempo(meteo.estado_tempo, meteo.precipitacao, 56, isNoiteAgora())}
+                      {iconeEstadoTempo(meteo.estado_tempo, meteo.precipitacao, 56)}
                     </span>
                     <p style={{
                       fontSize: 13, fontWeight: 400, color: C.navyDim,
@@ -394,9 +382,9 @@ export default function FichaPraia() {
 
                 {/* Row 1 — atmosphere */}
                 <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                  <DataBox icone={<IcRain />} label="Precip." value={meteoAgora?.precipitacao_prob != null ? `${meteoAgora.precipitacao_prob}%` : '—'} />
-                  <DataBox icone={<IcWind />} label="Vento" value={meteoAgora?.vento_intensidade != null ? labelVento(meteoAgora.vento_intensidade) : '—'} />
-                  <DataBox icone={<IcSun />} label="UV" value={labelUV(meteoAgora?.uv_index)} />
+                  <DataBox icone={<IcRain />} label="Precip." value={meteo.precipitacao_prob != null ? `${meteo.precipitacao_prob}%` : '—'} />
+                  <DataBox icone={<IcWind />} label="Vento" value={meteo.vento_intensidade != null ? labelVento(meteo.vento_intensidade) : '—'} />
+                  <DataBox icone={<IcSun />} label="UV" value={labelUV(meteo.uv_index)} />
                 </div>
 
                 {/* Row 2 — water */}
@@ -489,7 +477,7 @@ export default function FichaPraia() {
                     {praia.concelho && <span style={{ fontSize: 11, color: '#666' }}>{praia.concelho}</span>}
                     {meteo?.temp_max != null && (
                       <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#444', marginTop: 2 }}>
-                        <span style={{ color: C.navy }}>{iconeEstadoTempo(meteo.estado_tempo, meteo.precipitacao, 14, isNoiteAgora())}</span>
+                        <span style={{ color: C.navy }}>{iconeEstadoTempo(meteo.estado_tempo, meteo.precipitacao, 14)}</span>
                         {meteo.temp_max}°C
                       </span>
                     )}

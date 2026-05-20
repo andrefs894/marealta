@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { MeteoDiario } from '../types'
-import { dataHoje } from '../lib/utils'
+import { dataAlvo } from '../lib/utils'
 
-// Fetches today's per-beach daily aggregate from the meteo_diario view.
-// The view aggregates meteo_horaria (hourly Open-Meteo data) into one row
-// per (praia_id, data).
+// Fetches the recommendation-target day's per-beach daily aggregate from the
+// meteo_diario view (today during the day, tomorrow after sunset — see
+// dataAlvo). The view aggregates meteo_horaria into one row per (praia_id, data).
 export function useMeteo(praiaId: number | null) {
   const [meteo, setMeteo] = useState<MeteoDiario | null>(null)
   const [loading, setLoading] = useState(true)
@@ -22,7 +22,7 @@ export function useMeteo(praiaId: number | null) {
         .from('meteo_diario')
         .select('*')
         .eq('praia_id', praiaId)
-        .eq('data', dataHoje())
+        .eq('data', dataAlvo())
         .maybeSingle()
 
       if (error) {

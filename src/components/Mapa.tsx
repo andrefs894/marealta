@@ -4,7 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-le
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { PraiaComMeteo, RecomendacaoResult } from '../types'
-import { haversineKm, iconeEstadoTempo, isNoiteAgora } from '../lib/utils'
+import { haversineKm, iconeEstadoTempo } from '../lib/utils'
 
 const PORTUGAL_BOUNDS: L.LatLngBoundsExpression = [[36.3, -10.0], [42.5, -5.8]]
 
@@ -135,7 +135,7 @@ export default function Mapa({ praias, recomendacoes, coordenadas, radiusKm, onR
                 {p.concelho && <span style={{ fontSize: 11, color: '#666' }}>{p.concelho}</span>}
                 {p.meteo?.temp_max != null && (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#444', marginTop: 2 }}>
-                    <span style={{ color: '#1E3A5F' }}>{iconeEstadoTempo(p.meteo.estado_tempo, p.meteo.precipitacao, 14, isNoiteAgora())}</span>
+                    <span style={{ color: '#1E3A5F' }}>{iconeEstadoTempo(p.meteo.estado_tempo, p.meteo.precipitacao, 14)}</span>
                     {p.meteo.temp_max}°C
                   </span>
                 )}

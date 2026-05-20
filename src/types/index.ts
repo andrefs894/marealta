@@ -81,13 +81,14 @@ export interface PerfilUtilizador {
   distancia_maxima: DistanciaMaxima
 }
 
-// A beach with its weather data joined, used by the scoring engine.
-// `meteo` is the daily aggregate (temp range, daily peak UV/wind, sea avg)
-// used by scoring + heuristic occupation. `meteoAgora` is the current-hour
-// snapshot used for "right now" display fields (UV, wind, precip %).
+// A beach with the target day's weather data joined. `meteo` is the daily
+// aggregate (temp range, daily peak UV/wind, sea avg) used by scoring,
+// heuristic occupation, and the recommendation card display. The target
+// day is "today" during the day and "tomorrow" after sunset — see dataAlvo
+// in src/lib/utils.tsx. Hourly per-moment data is fetched separately by
+// useMeteoHoraria for the FichaPraia strip.
 export interface PraiaComMeteo extends Praia {
   meteo?: MeteoDiario
-  meteoAgora?: MeteoHoraria
   qualidade_agua?: QualidadeAgua
   distancia_minutos?: number // estimated drive time from user location
   distancia_km?: number      // straight-line distance from user location
