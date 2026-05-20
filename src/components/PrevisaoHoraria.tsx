@@ -1,9 +1,10 @@
+import { useEffect, useRef, useState } from 'react'
 import type { MeteoHoraria } from '../types'
-import { iconeEstadoTempo } from '../lib/utils'
+import { iconeEstadoTempo, isNoiteLisboa } from '../lib/utils'
 
-// Horizontal scrolling strip of hourly forecasts (next 24h) for a beach.
-// Each cell shows the local hour, a weather icon, temperature, and a small
-// drop if there's a non-trivial chance of rain. Mounts on FichaPraia.
+// Horizontal scrolling strip of hourly forecasts (next ~24 daylight/evening
+// hours) for a beach. Mounts on FichaPraia. Touch users swipe; desktop users
+// get the floating arrow buttons.
 
 const C = {
   navy: '#1E3A5F',
@@ -13,23 +14,53 @@ const C = {
   white: '#FFFFFF',
 } as const
 
+const CELL_W = 56
+const CELL_GAP = 6
+const SCROLL_BY = (CELL_W + CELL_GAP) * 3 // ~3 cells per arrow click
+
 interface Props {
   horas: MeteoHoraria[]
 }
 
-// Format an ISO timestamp as a 2-digit Europe/Lisbon hour like "14h".
 function formatarHora(iso: string): string {
-  const d = new Date(iso)
-  const hh = new Intl.DateTimeFormat('pt-PT', {
+  const hh = new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
     hour12: false,
     timeZone: 'Europe/Lisbon',
-  }).format(d)
-  // Intl returns "14" — strip any extra and append "h"
+  }).format(new Date(iso))
   return `${hh.padStart(2, '0').slice(0, 2)}h`
 }
 
 export default function PrevisaoHoraria({ horas }: Props) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [podeEsquerda, setPodeEsquerda] = useState(false)
+  const [podeDireita, setPodeDireita] = useState(false)
+
+  // Recompute arrow visibility on scroll, on mount, and whenever horas changes.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+
+    function update() {
+      if (!el) return
+      setPodeEsquerda(el.scrollLeft > 2)
+      setPodeDireita(el.scrollLeft + el.clientWidth < el.scrollWidth - 2)
+    }
+    update()
+    el.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    return () => {
+      el.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [horas])
+
+  function scrollDir(dir: -1 | 1) {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollBy({ left: dir * SCROLL_BY, behavior: 'smooth' })
+  }
+
   if (horas.length === 0) return null
 
   return (
@@ -38,6 +69,7 @@ export default function PrevisaoHoraria({ horas }: Props) {
       borderRadius: 16,
       padding: '14px 0 16px',
       boxShadow: '0 1px 3px rgba(30,58,95,0.06)',
+      position: 'relative',
     }}>
       <p style={{
         fontSize: 11, fontWeight: 600, color: C.navyDim,
@@ -48,21 +80,25 @@ export default function PrevisaoHoraria({ horas }: Props) {
       </p>
 
       <div
+        ref={scrollRef}
         role="list"
         style={{
           display: 'flex',
-          gap: 6,
+          gap: CELL_GAP,
           overflowX: 'auto',
           padding: '0 18px 4px',
           scrollbarWidth: 'none',
           msOverflowStyle: 'none',
           WebkitOverflowScrolling: 'touch',
         }}
-        // Hide scrollbar on webkit too
         className="previsao-horaria-strip"
       >
-        {horas.map((h, idx) => {
-          const isAgora = idx === 0
+        {horas.map((h) => {
+          // "Agora" only when the row's UTC hour really is the current one —
+          // not just because it happens to be the leftmost (e.g. someone
+          // opening the app at 3am sees the strip start at 08:00 today).
+          const isAgora = Math.abs(new Date(h.hora_utc).getTime() - Date.now()) < 60 * 60 * 1000
+          const noite = isNoiteLisboa(h.hora_utc)
           const choverá = (h.precipitacao_prob ?? 0) >= 30 || (h.precipitacao ?? 0) > 0.1
           return (
             <div
@@ -70,7 +106,7 @@ export default function PrevisaoHoraria({ horas }: Props) {
               role="listitem"
               style={{
                 flex: '0 0 auto',
-                width: 56,
+                width: CELL_W,
                 background: isAgora ? C.navy : C.navySoft,
                 color: isAgora ? C.white : C.navy,
                 borderRadius: 14,
@@ -91,7 +127,7 @@ export default function PrevisaoHoraria({ horas }: Props) {
               </span>
 
               <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 30 }} aria-hidden>
-                {iconeEstadoTempo(h.estado_tempo, h.precipitacao, 30)}
+                {iconeEstadoTempo(h.estado_tempo, h.precipitacao, 30, noite)}
               </span>
 
               <span style={{
@@ -117,9 +153,55 @@ export default function PrevisaoHoraria({ horas }: Props) {
         })}
       </div>
 
+      {/* Desktop scroll arrows. Auto-hide at edges; harmless (just decorative) on touch. */}
+      <ArrowButton
+        side="left"
+        visible={podeEsquerda}
+        onClick={() => scrollDir(-1)}
+      />
+      <ArrowButton
+        side="right"
+        visible={podeDireita}
+        onClick={() => scrollDir(1)}
+      />
+
       <style>{`
         .previsao-horaria-strip::-webkit-scrollbar { display: none; }
       `}</style>
     </div>
+  )
+}
+
+function ArrowButton({ side, visible, onClick }: { side: 'left' | 'right'; visible: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={side === 'left' ? 'Voltar' : 'Avançar'}
+      onClick={onClick}
+      style={{
+        position: 'absolute',
+        top: '50%',
+        [side]: 6,
+        transform: 'translateY(-10%)',
+        width: 30,
+        height: 30,
+        borderRadius: '50%',
+        border: 'none',
+        background: C.white,
+        boxShadow: '0 2px 8px rgba(30,58,95,0.18)',
+        display: visible ? 'flex' : 'none',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        padding: 0,
+        color: C.navy,
+      }}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        {side === 'left'
+          ? <polyline points="15 18 9 12 15 6" />
+          : <polyline points="9 18 15 12 9 6" />}
+      </svg>
+    </button>
   )
 }

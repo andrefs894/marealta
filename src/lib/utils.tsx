@@ -32,21 +32,46 @@ export function labelVento(intensidade: number | null | undefined): string {
   return labels[Math.min(intensidade, labels.length - 1)]
 }
 
-// Maps IPMA weather state text to an SVG icon component.
+// Maps IPMA/Open-Meteo weather state text to an SVG icon component.
 // Pass precipitacao so rain/shower icons aren't shown when precipitation probability is 0.
-export function iconeEstadoTempo(estado: string | null | undefined, precipitacao?: number | null, size: number = 24): React.ReactNode {
-  if (!estado) return <IcWeatherPartlyCloudy size={size} />
+// Pass noite=true to swap the sun-based icons for moon-based ones (clouds, rain,
+// thunderstorms etc. look the same day or night so they're not affected).
+export function iconeEstadoTempo(
+  estado: string | null | undefined,
+  precipitacao?: number | null,
+  size: number = 24,
+  noite: boolean = false,
+): React.ReactNode {
+  if (!estado) return noite ? <IcWeatherPartlyCloudyNight size={size} /> : <IcWeatherPartlyCloudy size={size} />
   const s = estado.toLowerCase()
-  if (s.includes('limpo')) return <IcWeatherSunny size={size} />
-  if (s.includes('pouco nublado') || s.includes('parcialmente')) return <IcWeatherPartlyCloudy size={size} />
+  if (s.includes('limpo')) return noite ? <IcWeatherClearNight size={size} /> : <IcWeatherSunny size={size} />
+  if (s.includes('pouco nublado') || s.includes('parcialmente')) {
+    return noite ? <IcWeatherPartlyCloudyNight size={size} /> : <IcWeatherPartlyCloudy size={size} />
+  }
   if (s.includes('muito nublado') || s.includes('encoberto')) return <IcWeatherCloudy size={size} />
   if (s.includes('trovoada')) return <IcWeatherThunderstorm size={size} />
   if (s.includes('neve')) return <IcWeatherSnow size={size} />
   if (s.includes('nevoeiro')) return <IcWeatherFog size={size} />
   if (s.includes('chuva') || s.includes('aguaceiro')) {
-    return precipitacao === 0 ? <IcWeatherPartlyCloudy size={size} /> : <IcWeatherRain size={size} />
+    if (precipitacao === 0) {
+      return noite ? <IcWeatherPartlyCloudyNight size={size} /> : <IcWeatherPartlyCloudy size={size} />
+    }
+    return <IcWeatherRain size={size} />
   }
-  return <IcWeatherPartlyCloudy size={size} />
+  return noite ? <IcWeatherPartlyCloudyNight size={size} /> : <IcWeatherPartlyCloudy size={size} />
+}
+
+// Returns true when the local Lisbon hour falls outside the rough daylight
+// window for that month. Heuristic — Portugal's actual sunrise/sunset shifts
+// by ~2h across the year, so we coarse-grain by season. Good enough for
+// picking sun vs moon icon; refine later from real sunrise/sunset data.
+export function isNoiteLisboa(iso: string): boolean {
+  const hh = new Intl.DateTimeFormat('en-US', { hour: '2-digit', hour12: false, timeZone: 'Europe/Lisbon' }).format(new Date(iso))
+  const hour = parseInt(hh, 10)
+  const month = new Date(iso).getUTCMonth() // 0–11
+  const summer = month >= 3 && month <= 8 // Apr–Sep: daylight ≈ 07:00–20:59
+  if (summer) return hour < 7 || hour >= 21
+  return hour < 8 || hour >= 18 // Oct–Mar: daylight ≈ 08:00–17:59
 }
 
 // Weather icon components — Meteocons-inspired, professional weather app style.
@@ -80,6 +105,50 @@ function IcWeatherSunny({ size }: { size: number }) {
       </g>
       {/* Sun body */}
       <circle cx="16" cy="16" r="7" fill={W.sun} stroke={W.sunStroke} strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+function IcWeatherClearNight({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      {/* Stars */}
+      <g fill="#FBE07A">
+        <circle cx="7" cy="9" r="0.9" />
+        <circle cx="25" cy="7" r="0.7" />
+        <circle cx="6" cy="23" r="0.8" />
+      </g>
+      {/* Crescent moon */}
+      <path
+        d="M22.5 19.5A8.5 8.5 0 1 1 12.5 9 6.5 6.5 0 0 0 22.5 19.5z"
+        fill="#FCE38A"
+        stroke="#E8B746"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function IcWeatherPartlyCloudyNight({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      {/* Crescent moon (top-left, partly hidden) */}
+      <path
+        d="M16 11.5A5.5 5.5 0 1 1 9.5 5 4.2 4.2 0 0 0 16 11.5z"
+        fill="#FCE38A"
+        stroke="#E8B746"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      {/* Cloud (front, bottom-right) */}
+      <path
+        d="M23.5 26H11a5 5 0 0 1-0.6-9.96A6 6 0 0 1 22.4 17.2 4.5 4.5 0 0 1 23.5 26z"
+        fill={W.cloud}
+        stroke={W.cloudEdge}
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
