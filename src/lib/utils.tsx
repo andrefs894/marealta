@@ -61,6 +61,12 @@ export function iconeEstadoTempo(
   return noite ? <IcWeatherPartlyCloudyNight size={size} /> : <IcWeatherPartlyCloudy size={size} />
 }
 
+// True if it's currently night in Lisbon (convenience over isNoiteLisboa
+// for callers that want "is it night right now").
+export function isNoiteAgora(): boolean {
+  return isNoiteLisboa(new Date().toISOString())
+}
+
 // Returns true when the local Lisbon hour falls outside the rough daylight
 // window for that month. Heuristic — Portugal's actual sunrise/sunset shifts
 // by ~2h across the year, so we coarse-grain by season. Good enough for

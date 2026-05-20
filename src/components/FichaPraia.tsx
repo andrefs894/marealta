@@ -6,7 +6,7 @@ import 'leaflet/dist/leaflet.css'
 import { supabase } from '../lib/supabase'
 import type { Praia, MeteoDiario, QualidadeAgua } from '../types'
 import type { ContextoApp } from '../App'
-import { dataHoje, labelVento, iconeEstadoTempo, labelUV, estimarMinutos } from '../lib/utils'
+import { dataHoje, labelVento, iconeEstadoTempo, labelUV, estimarMinutos, isNoiteAgora } from '../lib/utils'
 import { estimarOcupacao } from '../lib/ocupacao'
 import IndicadorOcupacao from './IndicadorOcupacao'
 import GaleriaFotos from './GaleriaFotos'
@@ -338,7 +338,7 @@ export default function FichaPraia() {
                     alignItems: 'center', justifyContent: 'flex-end', gap: 10,
                   }}>
                     <span style={{ display: 'flex', lineHeight: 1, color: C.navy }} aria-hidden>
-                      {iconeEstadoTempo(meteo.estado_tempo, meteo.precipitacao, 56)}
+                      {iconeEstadoTempo(meteo.estado_tempo, meteo.precipitacao, 56, isNoiteAgora())}
                     </span>
                     <p style={{
                       fontSize: 13, fontWeight: 400, color: C.navyDim,
@@ -473,7 +473,7 @@ export default function FichaPraia() {
                     {praia.concelho && <span style={{ fontSize: 11, color: '#666' }}>{praia.concelho}</span>}
                     {meteo?.temp_max != null && (
                       <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#444', marginTop: 2 }}>
-                        <span style={{ color: C.navy }}>{iconeEstadoTempo(meteo.estado_tempo, meteo.precipitacao, 14)}</span>
+                        <span style={{ color: C.navy }}>{iconeEstadoTempo(meteo.estado_tempo, meteo.precipitacao, 14, isNoiteAgora())}</span>
                         {meteo.temp_max}°C
                       </span>
                     )}
