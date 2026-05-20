@@ -4,7 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { supabase } from '../lib/supabase'
-import type { Praia, MeteoDiario, QualidadeAgua } from '../types'
+import type { Praia, MeteoDiario, MeteoHoraria, QualidadeAgua } from '../types'
 import type { ContextoApp } from '../App'
 import { dataHoje, labelVento, iconeEstadoTempo, labelUV, estimarMinutos, isNoiteAgora } from '../lib/utils'
 import { estimarOcupacao } from '../lib/ocupacao'
@@ -162,6 +162,11 @@ export default function FichaPraia() {
 
   const [praia, setPraia] = useState<Praia | null>(null)
   const [meteo, setMeteo] = useState<MeteoDiario | null>(null)
+  // Current-hour snapshot from meteo_horaria, fed alongside the daily
+  // aggregate. UV / wind / precip % read from this so the card matches
+  // "right now" instead of today's peak (which made UV read as "Muito
+  // Alto" at midnight).
+  const [meteoAgora, setMeteoAgora] = useState<MeteoHoraria | null>(null)
   const [qualidade, setQualidade] = useState<QualidadeAgua | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
@@ -183,9 +188,20 @@ export default function FichaPraia() {
       setPraia(p)
       setQualidade(qualRes.data ?? null)
 
-      const meteoRes = await supabase.from('meteo_diario').select('*')
-        .eq('praia_id', p.id).eq('data', dataHoje()).maybeSingle()
+      // Daily aggregate (temp range, sea data) + current-hour snapshot in parallel.
+      const desde = new Date(); desde.setMinutes(0, 0, 0)
+      const ate = new Date(desde.getTime() + 3600000)
+      const [meteoRes, agoraRes] = await Promise.all([
+        supabase.from('meteo_diario').select('*')
+          .eq('praia_id', p.id).eq('data', dataHoje()).maybeSingle(),
+        supabase.from('meteo_horaria').select('*')
+          .eq('praia_id', p.id)
+          .gte('hora_utc', desde.toISOString())
+          .lt('hora_utc', ate.toISOString())
+          .maybeSingle(),
+      ])
       setMeteo(meteoRes.data ?? null)
+      setMeteoAgora(agoraRes.data ?? null)
 
       setLoading(false)
     }
@@ -378,9 +394,9 @@ export default function FichaPraia() {
 
                 {/* Row 1 — atmosphere */}
                 <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                  <DataBox icone={<IcRain />} label="Precip." value={meteo.precipitacao_prob != null ? `${meteo.precipitacao_prob}%` : '—'} />
-                  <DataBox icone={<IcWind />} label="Vento" value={meteo.vento_intensidade != null ? labelVento(meteo.vento_intensidade) : '—'} />
-                  <DataBox icone={<IcSun />} label="UV" value={labelUV(meteo.uv_index)} />
+                  <DataBox icone={<IcRain />} label="Precip." value={meteoAgora?.precipitacao_prob != null ? `${meteoAgora.precipitacao_prob}%` : '—'} />
+                  <DataBox icone={<IcWind />} label="Vento" value={meteoAgora?.vento_intensidade != null ? labelVento(meteoAgora.vento_intensidade) : '—'} />
+                  <DataBox icone={<IcSun />} label="UV" value={labelUV(meteoAgora?.uv_index)} />
                 </div>
 
                 {/* Row 2 — water */}
