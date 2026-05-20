@@ -20,6 +20,10 @@ dist-ssr
 design/*
 !design/README.md
 
+# Supabase CLI local artefacts (functions code + migrations are tracked)
+supabase/.temp/
+supabase/.branches/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
