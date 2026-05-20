@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { MeteoHoraria } from '../types'
 import { iconeEstadoTempo, isNoiteLisboa } from '../lib/utils'
 
@@ -40,18 +40,21 @@ function formatarHora(iso: string): string {
   return `${hh.padStart(2, '0').slice(0, 2)}h`
 }
 
-// "Amanhã" for tomorrow's date, weekday name (Qua, Qui…) for later days.
-// Today is implicit so it never returns a label for today.
+// Day label for the strip's header. Returns "Hoje" / "Amanhã" for today and
+// tomorrow, full weekday name (capitalised, "-feira" stripped) for later.
 function labelDia(iso: string): string {
-  const dia = lisbonDate(iso)
+  const hoje = lisbonDate(new Date())
   const amanhaDate = new Date()
   amanhaDate.setDate(amanhaDate.getDate() + 1)
   const amanha = lisbonDate(amanhaDate)
+  const dia = lisbonDate(iso)
+  if (dia === hoje) return 'Hoje'
   if (dia === amanha) return 'Amanhã'
-  return new Intl.DateTimeFormat('pt-PT', {
-    weekday: 'short',
+  const name = new Intl.DateTimeFormat('pt-PT', {
+    weekday: 'long',
     timeZone: 'Europe/Lisbon',
-  }).format(new Date(iso)).replace('.', '').replace(/^./, c => c.toUpperCase())
+  }).format(new Date(iso))
+  return name.replace(/-feira/i, '').replace(/^./, c => c.toUpperCase())
 }
 
 export default function PrevisaoHoraria({ horas }: Props) {
@@ -72,7 +75,15 @@ export default function PrevisaoHoraria({ horas }: Props) {
     return () => clearTimeout(t)
   }, [horaAgora])
 
-  // Recompute arrow visibility on scroll, on mount, and whenever horas changes.
+  // Day label shown in the strip's header — tracks which day the leftmost
+  // visible cell belongs to. "Hoje" while today's cells lead, then "Amanhã"
+  // as the user scrolls into tomorrow, then weekday names beyond.
+  const [diaVisivel, setDiaVisivel] = useState<string>(() =>
+    horas[0] ? labelDia(horas[0].hora_utc) : 'Hoje'
+  )
+
+  // Recompute arrow visibility AND the leftmost-visible day on scroll, on
+  // mount, and whenever horas changes.
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
@@ -81,6 +92,11 @@ export default function PrevisaoHoraria({ horas }: Props) {
       if (!el) return
       setPodeEsquerda(el.scrollLeft > 2)
       setPodeDireita(el.scrollLeft + el.clientWidth < el.scrollWidth - 2)
+      const idx = Math.min(
+        Math.round(el.scrollLeft / (CELL_W + CELL_GAP)),
+        horas.length - 1,
+      )
+      if (idx >= 0 && horas[idx]) setDiaVisivel(labelDia(horas[idx].hora_utc))
     }
     update()
     el.addEventListener('scroll', update, { passive: true })
@@ -112,7 +128,7 @@ export default function PrevisaoHoraria({ horas }: Props) {
         letterSpacing: '2.5px', textTransform: 'uppercase',
         margin: '0 18px 12px', padding: 0,
       }}>
-        Próximas horas
+        {diaVisivel}
       </p>
 
       <div
@@ -129,7 +145,7 @@ export default function PrevisaoHoraria({ horas }: Props) {
         }}
         className="previsao-horaria-strip"
       >
-        {horas.map((h, idx) => {
+        {horas.map((h) => {
           // "Agora" matches exactly one row — the row whose UTC hour matches
           // the current UTC hour. Comparing floored hours (not within-1h)
           // avoids the bug where two consecutive rows both matched when
@@ -139,18 +155,9 @@ export default function PrevisaoHoraria({ horas }: Props) {
           const noite = isNoiteLisboa(h.hora_utc)
           const choverá = (h.precipitacao_prob ?? 0) >= 30 || (h.precipitacao ?? 0) > 0.1
 
-          // Show a slim day separator before any cell whose Lisbon date
-          // differs from the previous cell's. For the very first cell, only
-          // separate when it isn't today (i.e. the user opened the page
-          // after sunset and the strip starts with tomorrow's morning).
-          const dataLisbon = lisbonDate(h.hora_utc)
-          const dataAnterior = idx > 0 ? lisbonDate(horas[idx - 1].hora_utc) : lisbonDate(new Date())
-          const novoDia = dataLisbon !== dataAnterior
-
           return (
-            <Fragment key={h.hora_utc}>
-            {novoDia && <SeparadorDia label={labelDia(h.hora_utc)} />}
             <div
+              key={h.hora_utc}
               role="listitem"
               style={{
                 flex: '0 0 auto',
@@ -197,7 +204,6 @@ export default function PrevisaoHoraria({ horas }: Props) {
                 {choverá && h.precipitacao_prob != null ? `${h.precipitacao_prob}%` : ''}
               </span>
             </div>
-            </Fragment>
           )
         })}
       </div>
@@ -217,34 +223,6 @@ export default function PrevisaoHoraria({ horas }: Props) {
       <style>{`
         .previsao-horaria-strip::-webkit-scrollbar { display: none; }
       `}</style>
-    </div>
-  )
-}
-
-function SeparadorDia({ label }: { label: string }) {
-  return (
-    <div style={{
-      flex: '0 0 auto',
-      width: 40,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '0 2px',
-      borderLeft: '1px dashed rgba(30,58,95,0.2)',
-      marginLeft: 2,
-    }}>
-      <span style={{
-        fontSize: 9.5,
-        fontWeight: 700,
-        color: C.navyDim,
-        letterSpacing: '1.5px',
-        textTransform: 'uppercase',
-        textAlign: 'center',
-        lineHeight: 1.1,
-      }}>
-        {label}
-      </span>
     </div>
   )
 }
