@@ -18,7 +18,7 @@ const C = {
 
 const CELL_W = 56
 const CELL_GAP = 6
-const SCROLL_BY = (CELL_W + CELL_GAP) * 3 // ~3 cells per arrow click
+const SCROLL_BY = CELL_W + CELL_GAP // one cell per arrow click — lets the header track day boundaries precisely
 
 interface Props {
   horas: MeteoHoraria[]
