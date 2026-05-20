@@ -1,7 +1,7 @@
 import { useOutletContext, Link } from 'react-router-dom'
 import Header from '../components/Header'
 import { useFavoritas } from '../hooks/useFavoritas'
-import { iconeEstadoTempo } from '../lib/utils'
+import { iconeEstadoTempo, isNoiteAgora } from '../lib/utils'
 import type { ContextoApp } from '../App'
 import type { PraiaComMeteo } from '../types'
 
@@ -38,7 +38,7 @@ function CartaoFavorita({
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: C.navy, flexShrink: 0,
         }}>
-          {iconeEstadoTempo(m?.estado_tempo, m?.precipitacao, 20)}
+          {iconeEstadoTempo(m?.estado_tempo, m?.precipitacao, 20, isNoiteAgora())}
         </div>
         <div style={{ minWidth: 0 }}>
           <p style={{

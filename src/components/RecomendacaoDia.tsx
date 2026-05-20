@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { labelVento, iconeEstadoTempo, labelQualidadeAgua, labelUV } from '../lib/utils'
+import { labelVento, iconeEstadoTempo, labelQualidadeAgua, labelUV, isNoiteAgora } from '../lib/utils'
 import IndicadorOcupacao from './IndicadorOcupacao'
 import type { RecomendacaoResult } from '../types'
 
@@ -88,7 +88,7 @@ function CartaoPrincipal({
       {/* Weather state row: icon + state text + separator + temp max/min */}
       {m && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, background: 'rgba(255,255,255,0.08)', borderRadius: 10, padding: '10px 14px' }}>
-          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0 }}>{iconeEstadoTempo(m.estado_tempo, m.precipitacao, 28)}</span>
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0 }}>{iconeEstadoTempo(m.estado_tempo, m.precipitacao, 28, isNoiteAgora())}</span>
           <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', flex: 1, lineHeight: 1.2 }}>{m.estado_tempo ?? '—'}</span>
           {(m.temp_max != null || m.temp_min != null) && (
             <>
@@ -185,7 +185,7 @@ export function CartaoSecundario({ rec }: { rec: RecomendacaoResult }) {
           color: '#E8EDF2',
           flexShrink: 0,
         }}>
-          {iconeEstadoTempo(m?.estado_tempo, m?.precipitacao, 20)}
+          {iconeEstadoTempo(m?.estado_tempo, m?.precipitacao, 20, isNoiteAgora())}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontSize: 15, fontWeight: 500, color: '#E8EDF2', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

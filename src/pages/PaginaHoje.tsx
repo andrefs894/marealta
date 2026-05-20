@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useRecomendacao } from '../hooks/useRecomendacao'
 import { useFavoritas } from '../hooks/useFavoritas'
 import { usePerfil } from '../hooks/usePerfil'
-import { haversineKm, iconeEstadoTempo, labelQualidadeAgua, labelUV, labelVento } from '../lib/utils'
+import { haversineKm, iconeEstadoTempo, labelQualidadeAgua, labelUV, labelVento, isNoiteAgora } from '../lib/utils'
 import type { ContextoApp } from '../App'
 import type { DistanciaMaxima, RecomendacaoResult } from '../types'
 
@@ -227,7 +227,7 @@ function Hero({ rec, isFavorita, onToggleFavorita }: {
             alignItems: 'center', justifyContent: 'flex-end', gap: 10,
           }}>
             <span style={{ display: 'flex', lineHeight: 1, color: C.creamText }} aria-hidden>
-              {iconeEstadoTempo(m.estado_tempo, m.precipitacao, 64)}
+              {iconeEstadoTempo(m.estado_tempo, m.precipitacao, 64, isNoiteAgora())}
             </span>
             <p style={{
               fontSize: 14, fontWeight: 400, color: C.creamDim,
@@ -515,7 +515,7 @@ function CartaoSecundario({ rec }: { rec: RecomendacaoResult }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: C.navy, flexShrink: 0,
         }}>
-          {iconeEstadoTempo(m?.estado_tempo, m?.precipitacao, 20)}
+          {iconeEstadoTempo(m?.estado_tempo, m?.precipitacao, 20, isNoiteAgora())}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{
