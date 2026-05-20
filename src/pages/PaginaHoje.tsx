@@ -270,7 +270,7 @@ function Hero({ rec, isFavorita, onToggleFavorita }: {
       <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
         <DataBox
           icone={<IcWind />}
-          value={m?.vento_intensidade != null ? labelVento(m.vento_intensidade) : '—'}
+          value={praia.meteoAgora?.vento_intensidade != null ? labelVento(praia.meteoAgora.vento_intensidade) : '—'}
           label="VENTO"
         />
         <DataBox
@@ -280,7 +280,7 @@ function Hero({ rec, isFavorita, onToggleFavorita }: {
         />
         <DataBox
           icone={<IcSun />}
-          value={labelUV(m?.uv_index)}
+          value={labelUV(praia.meteoAgora?.uv_index)}
           label="UV"
         />
       </div>
