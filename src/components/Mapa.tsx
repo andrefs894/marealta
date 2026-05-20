@@ -151,7 +151,9 @@ export default function Mapa({ praias, recomendacoes, coordenadas, radiusKm, onR
         )}
       </MapContainer>
 
-      {/* Radius toggle — overlaid top-right */}
+      {/* Radius toggle — overlaid top-right. Disabled (and hinted) without a
+          location, since the radius filter and distance scoring both need
+          coordenadas to do anything useful. */}
       <div style={{
         position: 'absolute',
         top: 10,
@@ -163,16 +165,20 @@ export default function Mapa({ praias, recomendacoes, coordenadas, radiusKm, onR
         display: 'flex',
         padding: 2,
         gap: 2,
-      }}>
+        opacity: coordenadas ? 1 : 0.55,
+      }}
+      title={coordenadas ? undefined : 'Ativa a localização para filtrar por raio'}
+      >
         {([25, 50, 100, 200] as const).map(km => (
           <button
             key={km}
-            onClick={() => onRadiusChange(km)}
+            onClick={() => coordenadas && onRadiusChange(km)}
+            disabled={!coordenadas}
             style={{
               padding: '4px 10px',
               borderRadius: 16,
               border: 'none',
-              cursor: 'pointer',
+              cursor: coordenadas ? 'pointer' : 'not-allowed',
               fontSize: 11,
               fontWeight: 500,
               background: radiusKm === km ? '#1A6FB5' : 'transparent',
@@ -184,6 +190,26 @@ export default function Mapa({ praias, recomendacoes, coordenadas, radiusKm, onR
           </button>
         ))}
       </div>
+
+      {!coordenadas && (
+        <div style={{
+          position: 'absolute',
+          top: 46,
+          right: 10,
+          zIndex: 1000,
+          background: 'rgba(255,255,255,0.95)',
+          border: '0.5px solid #D0DDE8',
+          borderRadius: 12,
+          padding: '6px 10px',
+          maxWidth: 200,
+          fontSize: 11,
+          color: '#445A6E',
+          lineHeight: 1.35,
+          boxShadow: '0 2px 8px rgba(30,58,95,0.08)',
+        }}>
+          Sem localização — o raio não filtra. Ativa-a em <strong>Perfil</strong>.
+        </div>
+      )}
     </div>
   )
 }
