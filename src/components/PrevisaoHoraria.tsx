@@ -36,6 +36,19 @@ export default function PrevisaoHoraria({ horas }: Props) {
   const [podeEsquerda, setPodeEsquerda] = useState(false)
   const [podeDireita, setPodeDireita] = useState(false)
 
+  // Current UTC hour expressed as an integer (hours since epoch). Used to
+  // decide which cell wears the "Agora" highlight. Ticked at the start of
+  // each hour by the effect below so the highlight rolls forward without
+  // needing a page refresh.
+  const [horaAgora, setHoraAgora] = useState(() => Math.floor(Date.now() / 3600000))
+  useEffect(() => {
+    const msToNextHour = 3600000 - (Date.now() % 3600000) + 500
+    const t = setTimeout(() => {
+      setHoraAgora(Math.floor(Date.now() / 3600000))
+    }, msToNextHour)
+    return () => clearTimeout(t)
+  }, [horaAgora])
+
   // Recompute arrow visibility on scroll, on mount, and whenever horas changes.
   useEffect(() => {
     const el = scrollRef.current
@@ -94,10 +107,12 @@ export default function PrevisaoHoraria({ horas }: Props) {
         className="previsao-horaria-strip"
       >
         {horas.map((h) => {
-          // "Agora" only when the row's UTC hour really is the current one —
-          // not just because it happens to be the leftmost (e.g. someone
-          // opening the app at 3am sees the strip start at 08:00 today).
-          const isAgora = Math.abs(new Date(h.hora_utc).getTime() - Date.now()) < 60 * 60 * 1000
+          // "Agora" matches exactly one row — the row whose UTC hour matches
+          // the current UTC hour. Comparing floored hours (not within-1h)
+          // avoids the bug where two consecutive rows both matched when
+          // "now" sat between two hour ticks. horaAgora is captured at the
+          // top of the function so the comparison is consistent across cells.
+          const isAgora = Math.floor(new Date(h.hora_utc).getTime() / 3600000) === horaAgora
           const noite = isNoiteLisboa(h.hora_utc)
           const choverá = (h.precipitacao_prob ?? 0) >= 30 || (h.precipitacao ?? 0) > 0.1
           return (
