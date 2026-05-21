@@ -6,7 +6,11 @@ import 'leaflet/dist/leaflet.css'
 import type { PraiaComMeteo, RecomendacaoResult } from '../types'
 import { haversineKm, iconeEstadoTempo } from '../lib/utils'
 
-const PORTUGAL_BOUNDS: L.LatLngBoundsExpression = [[36.3, -10.0], [42.5, -5.8]]
+// Encompasses mainland + Açores (lng down to ~-31) + Madeira (lat down to ~32).
+// Mainland-only bounds clipped both archipelagos out entirely — their markers
+// existed but were unreachable, and FichaPraia snapped Açores/Madeira beaches
+// back to the mainland when centering.
+const PORTUGAL_BOUNDS: L.LatLngBoundsExpression = [[32.0, -31.5], [42.5, -6.0]]
 
 function criarIconePraia(destaque: boolean) {
   if (destaque) {

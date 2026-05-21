@@ -18,7 +18,8 @@ import { usePontosInteresse } from '../hooks/usePontosInteresse'
 import { useMeteoHoraria } from '../hooks/useMeteoHoraria'
 import PrevisaoHoraria from './PrevisaoHoraria'
 
-const PORTUGAL_BOUNDS: L.LatLngBoundsExpression = [[36.3, -10.0], [42.5, -5.8]]
+// Encompasses mainland + Açores (lng down to ~-31) + Madeira (lat down to ~32).
+const PORTUGAL_BOUNDS: L.LatLngBoundsExpression = [[32.0, -31.5], [42.5, -6.0]]
 
 const ICONE_PRAIA = L.divIcon({
   className: '',
