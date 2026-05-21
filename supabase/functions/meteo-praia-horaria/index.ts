@@ -7,27 +7,39 @@
 //
 // Open-Meteo accepts batched coordinates in a single GET — we send ~100 beaches
 // per request to stay safely below the URL-length limit. Beaches without
-// lat/lng are skipped. Inland beaches still get atmospheric data; the marine
-// fields land as null when Open-Meteo has no oceanographic grid coverage.
+// lat/lng are skipped.
+//
+// Marine API:
+//  * Only called for coastal beaches (`tipo = 'costeira'`). Inland beaches
+//    (`fluvial`, `albufeira`) get NULL temp_agua/ondulacao_altura — Open-Meteo
+//    sometimes snaps inland coords to nearby ocean cells, which produces
+//    misleading "sea temperature" for reservoirs and rivers.
+//  * Transient 429/5xx responses are retried with backoff. Before the retry
+//    logic was added, a single rate-limited batch wrote nulls for ~100
+//    coastal beaches and froze them until the next clean run.
 import { createServiceRoleClient } from "../_shared/supabase.ts";
 import { WMO_TIPOS_TEMPO, ventoKmhToClasse } from "../_shared/wmo-tipos-tempo.ts";
 
 const BATCH_SIZE = 100;          // beaches per Open-Meteo request
 const UPSERT_CHUNK = 1000;       // rows per supabase upsert
 const FORECAST_DAYS = 5;
+const FETCH_RETRIES = 3;
+// Open-Meteo free tier caps at 600 location-calls/min. Each batch is 100
+// calls, so 10s between batches keeps us right at the ceiling. With 14 batches
+// per run (8 forecast + 6 marine), the function takes ~140s wall-clock — well
+// inside the 150s edge-function timeout.
+const BATCH_PAUSE_MS = 10000;
 
 interface Beach {
   id: number;
   latitude: number;
   longitude: number;
+  tipo: string | null;
 }
 
-// Open-Meteo returns ONE object for a single-location request, or an ARRAY
-// when multiple latitude/longitude pairs are passed. We always pass multiple,
-// so the shape is the array form.
 interface ForecastLocation {
   hourly: {
-    time: string[];                          // ISO strings, "...T08:00"
+    time: string[];
     temperature_2m: (number | null)[];
     precipitation: (number | null)[];
     precipitation_probability: (number | null)[];
@@ -62,6 +74,7 @@ interface MeteoHorariaRow {
   estado_tempo: string | null;
   temp_agua: number | null;
   ondulacao_altura: number | null;
+  updated_at: string;        // always send so ON CONFLICT updates the timestamp
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -77,7 +90,32 @@ function toUtcTimestamp(t: string): string {
   return t.endsWith("Z") ? t : `${t}:00Z`;
 }
 
-async function fetchForecast(batch: Beach[]): Promise<ForecastLocation[]> {
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Retryable fetch with 429/5xx backoff. Returns the parsed JSON array or null
+// on permanent failure. Open-Meteo is bursty: a single 429 is recovered from
+// within a second or two.
+async function fetchWithRetry(label: string, url: string, batchLen: number): Promise<unknown[] | null> {
+  for (let attempt = 1; attempt <= FETCH_RETRIES; attempt++) {
+    const r = await fetch(url);
+    if (r.ok) {
+      const j = await r.json();
+      return Array.isArray(j) ? j : [j];
+    }
+    if (r.status === 429 || r.status >= 500) {
+      const wait = 1000 * attempt;
+      console.warn(`${label} ${r.status} on batch of ${batchLen} (attempt ${attempt}/${FETCH_RETRIES}), backing off ${wait}ms`);
+      await sleep(wait);
+      continue;
+    }
+    console.warn(`${label} non-retryable ${r.status} for batch of ${batchLen}`);
+    return null;
+  }
+  console.warn(`${label}: gave up after ${FETCH_RETRIES} attempts for batch of ${batchLen}`);
+  return null;
+}
+
+async function fetchForecast(batch: Beach[]): Promise<ForecastLocation[] | null> {
   const params = new URLSearchParams({
     latitude: batch.map((b) => b.latitude).join(","),
     longitude: batch.map((b) => b.longitude).join(","),
@@ -95,14 +133,10 @@ async function fetchForecast(batch: Beach[]): Promise<ForecastLocation[]> {
     forecast_days: String(FORECAST_DAYS),
   });
   const url = `https://api.open-meteo.com/v1/forecast?${params}`;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`Open-Meteo Forecast ${r.status} for batch of ${batch.length}`);
-  const j = await r.json();
-  // Single-location: returns object; multi: returns array. We always pass multi.
-  return Array.isArray(j) ? j : [j];
+  return (await fetchWithRetry("Forecast", url, batch.length)) as ForecastLocation[] | null;
 }
 
-async function fetchMarine(batch: Beach[]): Promise<MarineLocation[]> {
+async function fetchMarine(batch: Beach[]): Promise<MarineLocation[] | null> {
   const params = new URLSearchParams({
     latitude: batch.map((b) => b.latitude).join(","),
     longitude: batch.map((b) => b.longitude).join(","),
@@ -111,52 +145,76 @@ async function fetchMarine(batch: Beach[]): Promise<MarineLocation[]> {
     forecast_days: String(FORECAST_DAYS),
   });
   const url = `https://marine-api.open-meteo.com/v1/marine?${params}`;
-  const r = await fetch(url);
-  if (!r.ok) {
-    // Marine often 404s for inland points in some setups; log and return empty
-    console.warn(`Open-Meteo Marine ${r.status} for batch of ${batch.length}`);
-    return batch.map(() => ({}));
-  }
-  const j = await r.json();
-  return Array.isArray(j) ? j : [j];
+  return (await fetchWithRetry("Marine", url, batch.length)) as MarineLocation[] | null;
 }
 
-Deno.serve(async () => {
+// Hoisted into a background task because total wall clock (~160s with the
+// 10-second batch pacing required by Open-Meteo's 600/min limit) exceeds the
+// 150s edge-function HTTP timeout on Supabase's free tier. Background tasks
+// have a 200s ceiling on free tier — enough headroom for the worst case
+// where every batch incurs one retry.
+declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void };
+
+async function runRefresh() {
   try {
-  const supabase = createServiceRoleClient();
+    const supabase = createServiceRoleClient();
 
-  // 1. Load all beaches that have coordinates
-  const { data: beaches, error: praiasErr } = await supabase
-    .from("praias")
-    .select("id, latitude, longitude")
-    .not("latitude", "is", null)
-    .not("longitude", "is", null);
-  if (praiasErr) throw new Error(`Failed to load praias: ${praiasErr.message}`);
-  const beachList: Beach[] = (beaches ?? []) as Beach[];
-  console.log(`meteo-praia-horaria: ${beachList.length} beaches with coordinates`);
+    // 1. Load all beaches that have coordinates
+    const { data: beaches, error: praiasErr } = await supabase
+      .from("praias")
+      .select("id, latitude, longitude, tipo")
+      .not("latitude", "is", null)
+      .not("longitude", "is", null);
+    if (praiasErr) throw new Error(`Failed to load praias: ${praiasErr.message}`);
+    const beachList: Beach[] = (beaches ?? []) as Beach[];
+    const coastalList = beachList.filter((b) => b.tipo === "costeira");
+    console.log(`meteo-praia-horaria: ${beachList.length} beaches total, ${coastalList.length} coastal (eligible for marine)`);
 
-  // 2. Fetch Open-Meteo data in batches and build rows
-  const allRows: MeteoHorariaRow[] = [];
-  const batches = chunk(beachList, BATCH_SIZE);
+    // 2. Forecast (atmospheric+UV) for all beaches
+    const forecastByBeach = new Map<number, ForecastLocation>();
+    const forecastBatches = chunk(beachList, BATCH_SIZE);
+    let forecastFailed = 0;
+    for (const [i, batch] of forecastBatches.entries()) {
+      if (i > 0) await sleep(BATCH_PAUSE_MS);
+      const forecasts = await fetchForecast(batch);
+      if (forecasts === null) { forecastFailed += batch.length; continue; }
+      for (let k = 0; k < batch.length; k++) {
+        if (forecasts[k]?.hourly) forecastByBeach.set(batch[k].id, forecasts[k]);
+      }
+      console.log(`Forecast batch ${i + 1}/${forecastBatches.length} done`);
+    }
+    if (forecastFailed) console.warn(`Forecast: ${forecastFailed} beaches missed this run`);
 
-  for (const [i, batch] of batches.entries()) {
-    const [forecasts, marines] = await Promise.all([
-      fetchForecast(batch),
-      fetchMarine(batch),
-    ]);
+    // 3. Marine for coastal beaches only. Failed batches mean those beaches'
+    //    marine columns get NULL this run; the next clean run fixes them.
+    const marineByBeach = new Map<number, MarineLocation>();
+    const marineBatches = chunk(coastalList, BATCH_SIZE);
+    let marineFailed = 0;
+    for (const [i, batch] of marineBatches.entries()) {
+      if (i > 0) await sleep(BATCH_PAUSE_MS);
+      const marines = await fetchMarine(batch);
+      if (marines === null) { marineFailed += batch.length; continue; }
+      for (let k = 0; k < batch.length; k++) {
+        if (marines[k]) marineByBeach.set(batch[k].id, marines[k]);
+      }
+      console.log(`Marine batch ${i + 1}/${marineBatches.length} done`);
+    }
+    if (marineFailed) console.warn(`Marine: ${marineFailed} coastal beaches missed this run`);
 
-    for (let k = 0; k < batch.length; k++) {
-      const beach = batch[k];
-      const f = forecasts[k];
-      const m = marines[k] ?? {};
+    // 4. Build rows. Inland beaches always get null marine; coastal beaches get
+    //    marine values when available, null otherwise.
+    const now = new Date().toISOString();
+    const allRows: MeteoHorariaRow[] = [];
+    for (const beach of beachList) {
+      const f = forecastByBeach.get(beach.id);
       if (!f?.hourly) continue;
-
+      const m = beach.tipo === "costeira" ? marineByBeach.get(beach.id) : undefined;
       const times = f.hourly.time;
       for (let h = 0; h < times.length; h++) {
         const wmo = f.hourly.weather_code[h];
         const kmh = f.hourly.wind_speed_10m[h];
-        const waveHt = m.hourly?.wave_height?.[h] ?? null;
-        const sst = m.hourly?.sea_surface_temperature?.[h] ?? null;
+        const waveHt = m?.hourly?.wave_height?.[h] ?? null;
+        const sst = m?.hourly?.sea_surface_temperature?.[h] ?? null;
 
         allRows.push({
           praia_id: beach.id,
@@ -173,39 +231,41 @@ Deno.serve(async () => {
           estado_tempo: wmo != null ? WMO_TIPOS_TEMPO[wmo] ?? null : null,
           temp_agua: sst,
           ondulacao_altura: waveHt,
+          updated_at: now,
         });
       }
     }
-    console.log(`Batch ${i + 1}/${batches.length} done (${batch.length} beaches)`);
-  }
 
-  // 3. Upsert in chunks. Conflict target = (praia_id, hora_utc).
-  let upserted = 0;
-  for (const part of chunk(allRows, UPSERT_CHUNK)) {
-    const { error } = await supabase
-      .from("meteo_horaria")
-      .upsert(part, { onConflict: "praia_id,hora_utc" });
-    if (error) {
-      console.error(`Upsert chunk failed (size ${part.length}):`, error.message);
-      return new Response(
-        JSON.stringify({ ok: false, error: error.message, upserted }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
-      );
+    // 5. Upsert in chunks. Conflict target = (praia_id, hora_utc).
+    let upserted = 0;
+    for (const part of chunk(allRows, UPSERT_CHUNK)) {
+      const { error } = await supabase
+        .from("meteo_horaria")
+        .upsert(part, { onConflict: "praia_id,hora_utc" });
+      if (error) {
+        console.error(`Upsert chunk failed (size ${part.length}):`, error.message);
+        return new Response(
+          JSON.stringify({ ok: false, error: error.message, upserted }),
+          { status: 500, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      upserted += part.length;
     }
-    upserted += part.length;
-  }
 
-  console.log(`meteo-praia-horaria: upserted ${upserted} rows for ${beachList.length} beaches`);
-  return new Response(
-    JSON.stringify({ ok: true, beaches: beachList.length, rows: upserted }),
-    { headers: { "Content-Type": "application/json" } },
-  );
+    console.log(`meteo-praia-horaria: upserted ${upserted} rows; forecastFailed=${forecastFailed} marineFailed=${marineFailed}`);
   } catch (e) {
     const msg = e instanceof Error ? `${e.message}\n${e.stack}` : String(e);
     console.error("meteo-praia-horaria fatal:", msg);
-    return new Response(
-      JSON.stringify({ ok: false, error: msg }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
   }
+}
+
+Deno.serve(() => {
+  // Kick off the long-running refresh in the background and return immediately.
+  // Cron only cares that the HTTP call succeeded; the actual outcome lives in
+  // function logs.
+  EdgeRuntime.waitUntil(runRefresh());
+  return new Response(
+    JSON.stringify({ ok: true, started: true }),
+    { headers: { "Content-Type": "application/json" } },
+  );
 });
