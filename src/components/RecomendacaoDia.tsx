@@ -3,7 +3,7 @@ import { labelVento, iconeEstadoTempo, labelQualidadeAgua, labelUV, isNoiteAgora
 import IndicadorOcupacao from './IndicadorOcupacao'
 import type { RecomendacaoResult } from '../types'
 
-function DataBox({ icon, value, label }: { icon: string; value: string; label: string }) {
+function DataBox({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
   return (
     <div style={{
       flex: 1,
@@ -15,10 +15,27 @@ function DataBox({ icon, value, label }: { icon: string; value: string; label: s
       alignItems: 'center',
       gap: 4,
     }}>
-      <span style={{ fontSize: 20 }}>{icon}</span>
+      <span style={{ fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', height: 22 }}>{icon}</span>
       <span style={{ fontSize: 16, fontWeight: 500, color: 'white' }}>{value}</span>
       <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)' }}>{label}</span>
     </div>
+  )
+}
+
+function IcSun() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+      stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="4" />
+      <line x1="12" y1="2" x2="12" y2="4" />
+      <line x1="12" y1="20" x2="12" y2="22" />
+      <line x1="2" y1="12" x2="4" y2="12" />
+      <line x1="20" y1="12" x2="22" y2="12" />
+      <line x1="4.93" y1="4.93" x2="6.34" y2="6.34" />
+      <line x1="17.66" y1="17.66" x2="19.07" y2="19.07" />
+      <line x1="4.93" y1="19.07" x2="6.34" y2="17.66" />
+      <line x1="17.66" y1="6.34" x2="19.07" y2="4.93" />
+    </svg>
   )
 }
 
@@ -130,7 +147,7 @@ function CartaoPrincipal({
           <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)' }}>qualidade</span>
         </div>
         <DataBox
-          icon="☀️"
+          icon={<IcSun />}
           value={labelUV(m?.uv_index)}
           label="UV"
         />

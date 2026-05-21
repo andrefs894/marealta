@@ -368,12 +368,13 @@ function DataBox({ icone, value, label }: { icone: React.ReactNode; value: strin
 
 function Servicos({ praia }: { praia: RecomendacaoResult['praia'] }) {
   const servicos: { icone: React.ReactNode; texto: string }[] = []
-  if (praia.bandeira_azul)                  servicos.push({ icone: <IcFlag />,    texto: 'Bandeira Azul' })
-  if (praia.nadador_salvador)               servicos.push({ icone: <IcLife />,    texto: 'Nadador-Salvador' })
-  if (praia.acessivel)                      servicos.push({ icone: <IcAccess />,  texto: 'Acessível' })
-  if (praia.estacionamento === 'gratuito')  servicos.push({ icone: <IcParking color="#5BC8F7" />, texto: 'Estac. grátis' })
-  else if (praia.estacionamento === 'pago') servicos.push({ icone: <IcParking color="#5BC8F7" />, texto: 'Estac. pago' })
-  if (praia.restaurante)                    servicos.push({ icone: <IcFork />,    texto: 'Restaurante' })
+  if (praia.bandeira_azul)                        servicos.push({ icone: <IcFlag />,                       texto: 'Bandeira Azul' })
+  if (praia.nadador_salvador)                     servicos.push({ icone: <IcLife />,                       texto: 'Nadador-Salvador' })
+  if (praia.acessivel)                            servicos.push({ icone: <IcAccess />,                     texto: 'Acessível' })
+  if (praia.estacionamento === 'gratuito')        servicos.push({ icone: <IcParking color="#5BC8F7" />,    texto: 'Estac. grátis' })
+  else if (praia.estacionamento === 'pago')       servicos.push({ icone: <IcParking color="#5BC8F7" />,    texto: 'Estac. pago' })
+  else if (praia.estacionamento == null)          servicos.push({ icone: <IcParking color="#5BC8F7" />,    texto: 'Estacionamento' })
+  if (praia.restaurante)                          servicos.push({ icone: <IcFork />,                       texto: 'Restaurante' })
 
   if (servicos.length === 0) return null
 
@@ -432,8 +433,8 @@ function IcDrop() {
 }
 function IcSun() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="#F5C24D"
-      stroke="#F5C24D" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+      stroke={C.creamText} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="4" />
       <line x1="12" y1="2" x2="12" y2="4" />
       <line x1="12" y1="20" x2="12" y2="22" />
@@ -447,48 +448,56 @@ function IcSun() {
   )
 }
 
-// ── Service-pill icons (colored, like the screenshot) ──────────────────
+// ── Service-pill icons — exact Lucide SVG paths ─────────────────────────
 function IcFlag() {
+  // lucide/flag
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="#3B82F6" stroke="#3B82F6" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 22V4a1 1 0 0 1 1-1h13l-2 5 2 5H6v9" />
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1A6FB5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528" />
     </svg>
   )
 }
 function IcLife() {
+  // lucide/life-buoy
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#E05252" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" />
-      <circle cx="12" cy="12" r="3.5" fill="#E05252" />
-      <line x1="5.5" y1="5.5" x2="9.5" y2="9.5" />
-      <line x1="14.5" y1="14.5" x2="18.5" y2="18.5" />
-      <line x1="18.5" y1="5.5" x2="14.5" y2="9.5" />
-      <line x1="9.5" y1="14.5" x2="5.5" y2="18.5" />
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E05252" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="m4.93 4.93 4.24 4.24" />
+      <path d="m14.83 9.17 4.24-4.24" />
+      <path d="m14.83 14.83 4.24 4.24" />
+      <path d="m9.17 14.83-4.24 4.24" />
+      <circle cx="12" cy="12" r="4" />
     </svg>
   )
 }
 function IcAccess() {
+  // lucide/accessibility (dynamic wheelchair symbol)
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="#3B82F6" stroke="#3B82F6" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <circle cx="12" cy="5.5" r="1.4" fill="#fff" stroke="#fff" />
-      <path d="M9 9.5h6M11 9.5v4l-2 4M13 13.5h2.5l1.5 4" stroke="#fff" strokeWidth="1.4" fill="none" />
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="16" cy="4" r="1" />
+      <path d="m18 19 1-7-6 1" />
+      <path d="m5 8 3-3 5.5 3-2.36 3.5" />
+      <path d="M4.24 14.5a5 5 0 0 0 6.88 6" />
+      <path d="M13.76 17.5a5 5 0 0 0-6.88-6" />
     </svg>
   )
 }
 function IcParking({ color }: { color: string }) {
+  // lucide/square-parking (filled box for legibility at small size)
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill={color} stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="3" />
-      <path d="M10 17V8h3.2a2.8 2.8 0 0 1 0 5.6H10" stroke="#fff" fill="none" strokeWidth="1.8" />
+    <svg width="14" height="14" viewBox="0 0 24 24">
+      <rect width="18" height="18" x="3" y="3" rx="2" fill={color} />
+      <path d="M9 17V7h4a3 3 0 0 1 0 6H9" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
     </svg>
   )
 }
 function IcFork() {
+  // lucide/utensils
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#E89B3C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M7 2v8a2 2 0 0 0 4 0V2M9 10v12" />
-      <path d="M16 2c-1.5 0-3 2-3 5s1.5 5 3 5v10" />
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E89B3C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" />
+      <path d="M7 2v20" />
+      <path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" />
     </svg>
   )
 }
