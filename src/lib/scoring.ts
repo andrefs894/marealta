@@ -57,14 +57,28 @@ function scorarMultidao(praia: PraiaComMeteo): number {
   return 100 - praia.ocupacao_atual
 }
 
-// Score distance: shorter = better (when user has a max preference)
+// Score distance relative to the user's chosen radius. The radius already
+// hard-filters beaches in PaginaHoje; this scoring keeps a soft preference
+// for closer beaches *within* the chosen range, scaled by where in the
+// range the beach sits. Without scaling, a 20 km beach beats a 100 km one
+// even when the user explicitly extended the search to 200 km — which
+// makes the radius pill feel broken.
 function scorarDistancia(km: number | undefined, maxKm: number | null): number {
   if (km == null) return 50
-  if (maxKm != null && km > maxKm) return 0
-  if (km <= 25)  return 100
-  if (km <= 50)  return 85
-  if (km <= 100) return 60
-  return 30
+  if (maxKm == null || maxKm <= 0) {
+    // No max preference: fall back to absolute bands so the score still
+    // exists but doesn't depend on a radius the user never set.
+    if (km <= 25)  return 100
+    if (km <= 50)  return 85
+    if (km <= 100) return 60
+    return 30
+  }
+  if (km > maxKm) return 0 // defensive — should be filtered upstream
+  const ratio = km / maxKm
+  if (ratio <= 0.25) return 100
+  if (ratio <= 0.50) return 85
+  if (ratio <= 0.75) return 65
+  return 45
 }
 
 // Score profile match: extra points when beach features match the profile
