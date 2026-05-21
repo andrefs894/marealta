@@ -4,13 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-le
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { PraiaComMeteo, RecomendacaoResult } from '../types'
-import { haversineKm, iconeEstadoTempo } from '../lib/utils'
-
-// Encompasses mainland + Açores (lng down to ~-31) + Madeira (lat down to ~32).
-// Mainland-only bounds clipped both archipelagos out entirely — their markers
-// existed but were unreachable, and FichaPraia snapped Açores/Madeira beaches
-// back to the mainland when centering.
-const PORTUGAL_BOUNDS: L.LatLngBoundsExpression = [[32.0, -31.5], [42.5, -6.0]]
+import { haversineKm, iconeEstadoTempo, regiaoPara, REGIAO_BOUNDS } from '../lib/utils'
 
 function criarIconePraia(destaque: boolean) {
   if (destaque) {
@@ -53,6 +47,17 @@ function VistaAdaptavel({
   return null
 }
 
+// Clamps pan to the user's region so a Madeira user can't drift to the
+// mainland (and vice versa). React-Leaflet only reads maxBounds on initial
+// mount, so we re-apply it imperatively whenever the region changes.
+function LimitarRegiao({ regiao }: { regiao: keyof typeof REGIAO_BOUNDS }) {
+  const map = useMap()
+  useEffect(() => {
+    map.setMaxBounds(REGIAO_BOUNDS[regiao])
+  }, [regiao, map])
+  return null
+}
+
 interface MapaProps {
   praias: PraiaComMeteo[]
   recomendacoes: RecomendacaoResult[]
@@ -64,6 +69,11 @@ interface MapaProps {
 export default function Mapa({ praias, recomendacoes, coordenadas, radiusKm, onRadiusChange }: MapaProps) {
   const topId = recomendacoes[0]?.praia.id
   const fecharPopup = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Region drives both the initial maxBounds (passed to MapContainer for the
+  // mount) and the live update via LimitarRegiao when coordenadas changes.
+  const regiao = regiaoPara(coordenadas?.lat, coordenadas?.lng)
+  const bounds = REGIAO_BOUNDS[regiao]
 
   const praiasVisiveis = praias.filter(p => {
     if (p.latitude == null || p.longitude == null) return false
@@ -77,7 +87,7 @@ export default function Mapa({ praias, recomendacoes, coordenadas, radiusKm, onR
         center={[39.5, -8.0]}
         zoom={7}
         minZoom={6}
-        maxBounds={PORTUGAL_BOUNDS}
+        maxBounds={bounds}
         maxBoundsViscosity={1.0}
         attributionControl={false}
         style={{ height: '100%', width: '100%' }}
@@ -87,6 +97,7 @@ export default function Mapa({ praias, recomendacoes, coordenadas, radiusKm, onR
         />
 
         <VistaAdaptavel coordenadas={coordenadas} radiusKm={radiusKm} />
+        <LimitarRegiao regiao={regiao} />
 
         {coordenadas && (
           <Circle

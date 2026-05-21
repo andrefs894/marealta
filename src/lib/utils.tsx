@@ -2,6 +2,32 @@ import React from 'react'
 
 // General utility functions
 
+// Map-pan bounds for each Portuguese region. The home map and the FichaPraia
+// mini-map both clamp panning to whichever region the viewer is in, so a user
+// in Madeira can't accidentally drift 1000 km east into the mainland (and vice
+// versa). Bounds are [[southLat, westLng], [northLat, eastLng]].
+//
+// Madeira box covers Madeira + Porto Santo + Desertas.
+// Açores box covers all 9 islands, west (Flores/Corvo) to east (Santa Maria).
+export type RegiaoPt = 'continente' | 'madeira' | 'acores'
+
+export const REGIAO_BOUNDS: Record<RegiaoPt, [[number, number], [number, number]]> = {
+  continente: [[36.3, -10.0], [42.5, -5.8]],
+  madeira:    [[32.3, -17.5], [33.3, -16.0]],
+  acores:     [[36.5, -31.5], [39.9, -24.5]],
+}
+
+// Pick the region a lat/lng falls inside. Uses simple rectangles — fine here
+// because the three regions are far apart and don't overlap. Returns
+// 'continente' as the fallback when coordinates don't match any region
+// (covers the no-location case and points off in open ocean).
+export function regiaoPara(lat: number | null | undefined, lng: number | null | undefined): RegiaoPt {
+  if (lat == null || lng == null) return 'continente'
+  if (lat >= 32.3 && lat <= 33.3 && lng >= -17.5 && lng <= -16.0) return 'madeira'
+  if (lat >= 36.5 && lat <= 39.9 && lng >= -31.5 && lng <= -24.5) return 'acores'
+  return 'continente'
+}
+
 // Straight-line distance in km between two lat/lng points (Haversine formula)
 export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371

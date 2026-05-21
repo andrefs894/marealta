@@ -6,7 +6,7 @@ import 'leaflet/dist/leaflet.css'
 import { supabase } from '../lib/supabase'
 import type { Praia, MeteoDiario, QualidadeAgua } from '../types'
 import type { ContextoApp } from '../App'
-import { dataAlvo, isAlvoAmanha, labelVento, iconeEstadoTempo, labelUV, estimarMinutos } from '../lib/utils'
+import { dataAlvo, isAlvoAmanha, labelVento, iconeEstadoTempo, labelUV, estimarMinutos, regiaoPara, REGIAO_BOUNDS } from '../lib/utils'
 import { estimarOcupacao } from '../lib/ocupacao'
 import IndicadorOcupacao from './IndicadorOcupacao'
 import GaleriaFotos from './GaleriaFotos'
@@ -17,9 +17,6 @@ import { useFotos } from '../hooks/useFotos'
 import { usePontosInteresse } from '../hooks/usePontosInteresse'
 import { useMeteoHoraria } from '../hooks/useMeteoHoraria'
 import PrevisaoHoraria from './PrevisaoHoraria'
-
-// Encompasses mainland + Açores (lng down to ~-31) + Madeira (lat down to ~32).
-const PORTUGAL_BOUNDS: L.LatLngBoundsExpression = [[32.0, -31.5], [42.5, -6.0]]
 
 const ICONE_PRAIA = L.divIcon({
   className: '',
@@ -457,7 +454,7 @@ export default function FichaPraia() {
                 center={[praia.latitude, praia.longitude]}
                 zoom={14}
                 minZoom={6}
-                maxBounds={PORTUGAL_BOUNDS}
+                maxBounds={REGIAO_BOUNDS[regiaoPara(praia.latitude, praia.longitude)]}
                 maxBoundsViscosity={1.0}
                 attributionControl={false}
                 style={{ height: '100%', width: '100%' }}
