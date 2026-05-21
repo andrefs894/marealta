@@ -4,9 +4,9 @@
 - **Forecast endpoint:** `https://api.open-meteo.com/v1/forecast` — temp, precipitation, wind, UV, weather code (WMO)
 - **Marine endpoint:** `https://marine-api.open-meteo.com/v1/marine` — sea-surface temp, wave height
 - **Data:** Hourly forecast, 5 days out, per beach (lat/lon based — not regional stations)
-- **Update:** Hourly via `supabase/functions/meteo-praia-horaria` (pg_cron, minute 5 each hour, UTC)
-- **Auth:** None. Free tier recommends < 10,000 calls/day; we use ~32/day (8 batched calls × 2 APIs × hourly cron / 6h Open-Meteo model refresh).
-- **Batching:** ~100 beaches per request via comma-separated `latitude=,&longitude=,`. The response is a parallel array of forecasts in input order.
+- **Update:** Every 6 hours at 00:30/06:30/12:30/18:30 UTC via `supabase/functions/meteo-praia-horaria` (pg_cron). Aligns with Open-Meteo's NWP model refresh cycle — running more often just re-fetches the same forecast values.
+- **Auth:** None. Free tier limits: < 600 location-calls/min, < 10,000/day. We use ~1,329 calls/run × 4 runs = 5,316/day (≈ 47% of daily quota). Each run paces batches 10s apart to stay under the per-minute ceiling.
+- **Batching:** ~100 beaches per request via comma-separated `latitude=,&longitude=,`. The response is a parallel array of forecasts in input order. Marine API is only called for coastal beaches (skip inland fluvial/albufeira — sea-temp/wave-height on a reservoir is meaningless).
 - **Writes:** `meteo_horaria` table (~91K rows refreshed in place); `meteo_diario` view aggregates these into per-beach daily summaries for the homepage.
 
 ### Legacy: IPMA (free)
@@ -23,9 +23,10 @@ n8n workflows (`meteo-diario.json`, `mar-e-temperatura.json`,
 - **Format:** ArcGIS JSON. `categoria_agua_balnear`: 1=costeira, 2=fluvial, 3=albufeira
 - **Usage:** One-time import via `n8n/workflows/importar-praias.json`
 
-## 3. Water quality — InfoÁgua (APA) (free)
-- **URL:** `https://infoagua.apambiente.pt/`
-- **Workflow:** `n8n/workflows/qualidade-agua.json` (weekly)
+## 3. Water quality — EEA WISE (free)
+- **URL:** `https://discodata.eea.europa.eu/sql` (queries `WISE_BWD.latest.assessment_BathingWaterStatus`)
+- **Edge Function:** `supabase/functions/qualidade-agua` (annual cron, October 1st 09:00 UTC)
+- **Why annual:** EEA publishes Member States' bathing-water assessments once per year. The dormant n8n workflow at `n8n/workflows/qualidade-agua.json` is retained as documentation only.
 
 ## 4. Sea swell + water temp — IPMA (free)
 - **URL:** `https://api.ipma.pt/` (sea state section)
@@ -80,7 +81,8 @@ Hourly weather ingest now runs on Supabase. Code in `supabase/functions/`, sched
 
 | Function | Purpose | Cadence |
 |---|---|---|
-| `meteo-praia-horaria` | Open-Meteo Forecast + Marine → `meteo_horaria` | hourly, minute 5 UTC |
+| `meteo-praia-horaria` | Open-Meteo Forecast + Marine → `meteo_horaria` | every 6h at :30 UTC (00/06/12/18) |
+| `qualidade-agua` | EEA WISE bathing-water status → `qualidade_agua` | annually, October 1st 09:00 UTC |
 
 To deploy/redeploy: `supabase functions deploy <name>`. The service_role JWT used by pg_cron lives in Supabase Vault under secret name `service_role_key`.
 
@@ -96,7 +98,7 @@ Runs locally via Docker. Used for one-time imports and monthly refresh jobs that
 | `meteo-diario.json` | IPMA daily forecast | retired 2026-05-20 — replaced by Supabase Edge Function `meteo-praia-horaria` (Open-Meteo, hourly, per-beach) |
 | `mar-e-temperatura.json` | Sea state & water temp | retired — folded into `meteo-praia-horaria` |
 | `uv-index.json` | UV index | retired — folded into `meteo-praia-horaria` |
-| `qualidade-agua.json` | InfoÁgua water quality | weekly |
+| `qualidade-agua.json` | EEA bathing water quality | retired 2026-05-21 — replaced by Supabase Edge Function `qualidade-agua` (annual) |
 | `match-google-places.json` | Resolve `google_place_id` + rating | monthly (incremental) |
 | `popular-times.json` | SerpAPI hourly busyness | monthly (1st 06h) — dormant |
 | `photos-google-places.json` | (NEW) fetch photos for `praia_fotos` | monthly |

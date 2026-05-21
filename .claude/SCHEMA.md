@@ -89,7 +89,7 @@ FROM meteo_horaria
 GROUP BY praia_id, (hora_utc AT TIME ZONE 'Europe/Lisbon')::date;
 ```
 
-## qualidade_agua (bathing water quality — updated weekly via n8n)
+## qualidade_agua (bathing water quality — updated annually via Edge Function `qualidade-agua`)
 ```sql
 CREATE TABLE qualidade_agua (
   id SERIAL PRIMARY KEY,
